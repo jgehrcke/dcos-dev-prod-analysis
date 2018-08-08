@@ -13,6 +13,7 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
+import argparse
 import logging
 import os
 import pickle
@@ -37,9 +38,24 @@ GHUB = Github(
 
 
 def main():
-    repo = GHUB.get_organization('mesosphere').get_repo('dcos-enterprise')
+
+    parser = argparse.ArgumentParser(
+        description='Fetch data from a GitHub repository. Requires the '
+        'environment variables GITHUB_USERNAME and GITHUB_APITOKEN to be set.')
+    parser.add_argument(
+        'repo',
+        metavar='REPOSITORY',
+        help="Organization and repository. Must contain a slash. "
+        "Example: coke/truck"
+        )
+    args = parser.parse_args()
+
+    org, reponame = args.repo.split('/')
+
+    repo = GHUB.get_organization(org).get_repo(reponame)
+    log.info('Working with repository `%s`', repo)
     log_remaining_requests()
-    fetch_prs_with_comments_for_repo(repo, 'dcos-enterprise')
+    fetch_prs_with_comments_for_repo(repo, reponame)
     log_remaining_requests()
 
 
