@@ -14,15 +14,9 @@
 # the License.
 
 import logging
-import json
 import os
-import re
 import pickle
-import sys
 import concurrent.futures
-
-from collections import Counter
-from datetime import datetime
 
 from github import Github
 
@@ -46,11 +40,6 @@ def main():
     repo = GHUB.get_organization('mesosphere').get_repo('dcos-enterprise')
     log_remaining_requests()
     fetch_prs_with_comments_for_repo(repo, 'dcos-enterprise')
-    log_remaining_requests()
-
-    repo = GHUB.get_organization('dcos').get_repo('dcos')
-    log_remaining_requests()
-    fetch_prs_with_comments_for_repo(repo, 'dcos')
     log_remaining_requests()
 
 
@@ -88,7 +77,7 @@ def fetch_comments_for_all_prs(prs_current_without_comments, reponame):
             set(prs_old_with_comments.keys())
 
         prs_to_fetch_comments_for = {
-            n:prs_current_without_comments[n] for n in new_pr_numbers
+            n: prs_current_without_comments[n] for n in new_pr_numbers
         }
 
         if not prs_to_fetch_comments_for:
@@ -143,7 +132,8 @@ def fetch_pr_comments_in_threadpool(prs_to_fetch_comments_for):
 
         # Submit work, build up mapping between futures and pull requests.
         futures_to_prs = {
-            executor.submit(fetch_comments_for_pr, pr): pr for _, pr in prs_to_fetch_comments_for.items()
+            executor.submit(fetch_comments_for_pr, pr): pr
+            for _, pr in prs_to_fetch_comments_for.items()
             }
 
         for future in concurrent.futures.as_completed(futures_to_prs):
@@ -157,7 +147,6 @@ def fetch_pr_comments_in_threadpool(prs_to_fetch_comments_for):
     reqlimit_after = GHUB.rate_limiting[0]
     reqs_performed = reqlimit_before - reqlimit_after
     log.info('Number of requests performed: %s', reqs_performed)
-
 
 
 def fetch_comments_for_pr(pr):
@@ -174,17 +163,13 @@ def fetch_comments_for_pr(pr):
 
 def fetch_pull_requests(repo, reponame):
 
-    log.info('Fetch pull requests')
-    #today = datetime.now().strftime('%Y-%m-%d')
-    #filepath = today + '-' + name_prefix + '.pickle'
-    filepath = reponame + '_pull-requests.pickle'
+    log.info('Fetch pull requests with pagination (~100 per HTTP request)')
 
-    prs = load_file_if_exists(filepath)
+    persist_filepath = reponame + '_pull-requests.pickle'
+    prs = load_file_if_exists(persist_filepath)
     if prs is not None:
         return prs
 
-    # The following loop emits 10 HTTP requests for fetching data about
-    # 1000 pull requests.
     reqlimit_before = GHUB.rate_limiting[0]
 
     prs = {}
@@ -193,13 +178,12 @@ def fetch_pull_requests(repo, reponame):
         prs[pr.number] = pr
         if count % 100 == 0:
             log.info('%s pull requests fetched', count)
-            # log.info('GH rate limit: %r', GHUB.rate_limiting)
 
     reqlimit_after = GHUB.rate_limiting[0]
     reqs_performed = reqlimit_before - reqlimit_after
     log.info('Number of requests performed: %s', reqs_performed)
 
-    persist_data(prs, filepath)
+    persist_data(prs, persist_filepath)
     return prs
 
 
@@ -223,56 +207,6 @@ def persist_data(obj, filepath):
     log.info('Persist %s byte(s) to file %s', len(data), filepath)
     with open(filepath, 'wb') as f:
         f.write(data)
-
-
-def fetch_issue_comments_and_associate_with_prs_legacy():
-    issuecomments = fetch_issue_comments_legacy(repo)
-
-    # Associate comments with pull requests: each "issue comment" listed for the
-    # repository contains an `html_url` attribute which refers to the issue/PR
-    # number that the comment was posted in
-    # Ref: https://developer.github.com/v3/issues/comments/#list-comments-in-a-repository
-    # Note(JP): after some investigation I found that this part of the API
-    # only reveals those comments of pull requests that are made against the
-    # master branch. Comments of pull requests against non-master branches
-    # (such as `1.11`) are simply not returned.
-    for _, pr in prs.items():
-        pr._issuecomments =[]
-        # print(pr.comments)
-
-    for ic in issuecomments:
-        match = re.search('pull/(?P<prnumber>[0-9]+)', ic.html_url)
-        prnumber = int(match.group('prnumber'))
-        pr = prs[prnumber]
-        pr._issuecomments.append(ic)
-
-
-def fetch_issue_comments_legacy(repo):
-
-    log.info('Fetch issue comments')
-    name_prefix = 'issue-comments-raw'
-    today = datetime.now().strftime('%Y-%m-%d')
-    filepath = today + '-' + name_prefix + '.pickle'
-
-    issuecomments = load_file_if_exists(filepath)
-    if issuecomments is not None:
-        return issuecomments
-
-    # The following loop emits 10 HTTP requests for fetching data about
-    # 1000 pull request / issue comments.
-    reqlimit_before = GHUB.rate_limiting[0]
-    issuecomments = []
-    for count, comment in enumerate(repo.get_issues_comments(), 1):
-        issuecomments.append(comment)
-        if count % 100 == 0:
-            log.info('%s comments fetched', count)
-            log.info('GH rate limit: %r', GHUB.rate_limiting)
-    reqlimit_after = GHUB.rate_limiting[0]
-    reqs_performed = reqlimit_before - reqlimit_after
-    log.info('Number of requests performed: %s', reqs_performed)
-
-    persist_data(issuecomments, filepath)
-    return issuecomments
 
 
 if __name__ == "__main__":
