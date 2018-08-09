@@ -140,6 +140,24 @@ def build_histograms_from_override_comments(override_comments):
 
 
 def identify_mergebot_override_comments(prs):
+    """
+    Extract all Mergebot override comments from `prs`.
+
+    Args:
+        prs: a `list` of `github.PullRequest.PullRequest` objects, whereas
+            each of these is expected to be enriched with the non-canonical
+            `_issue_comments` attribute, expected to be a list of objects of
+            type `github.IssueComment.IssueComment`, which are all the normal
+            comments on the pull request (e.g. review comments are not
+            included).
+
+    Returns:
+        all_pr_comments, all_override_comments
+
+        Most importantly, however, this function is expected to add the property
+        `_override_comments` to each PR object, a (potentially empty) list of
+        override comment dictionaries.
+    """
 
     # Create a data structure `all_pr_comments` that is meant to contain all
     # issue comments from all pull requests, in a single list. "Issue comments"
@@ -149,8 +167,9 @@ def identify_mergebot_override_comments(prs):
     for pr in prs:
         all_pr_comments.extend(pr._issue_comments)
 
+    # Basic statistics to get a feeling for the data.
     comments_mentioning_an_override = [
-        c for c in all_pr_comments \
+        c for c in all_pr_comments
         if '@mesosphere-mergebot override-status' in c.body
     ]
 
@@ -160,32 +179,47 @@ def identify_mergebot_override_comments(prs):
         len(comments_mentioning_an_override)
     )
 
-    # Analyze PR comments, look for status overrides.
-    override_comments = []
+    # Apply heuristics for detecting actual status overrides.
+    all_override_comments = []
     for pr in prs:
-        # Dynamically load the override comments onto each PR object.
         pr._override_comments = []
         for comment in pr._issue_comments:
             oc = detect_override_comment(comment, pr)
             if oc is not None:
-                override_comments.append(oc)
+                all_override_comments.append(oc)
                 pr._override_comments.append(oc)
 
-    log.info('Number of override comments: %s', len(override_comments))
-    # log.info(
-    #     'Identified %s mentions as conversations about override comments and '
-    #     'ignored them', convs_about_override_comments
-    # )
+    log.info('Number of override comments: %s', len(all_override_comments))
 
-    # Note: a (desired) side effect here is that `prs` have been modified
+    # Note(JP): a (desired) side effect here is that `prs` have been modified
     # in-place with the `_override_comments` property. Do not return this to
     # make the side effect more explicit.
-    return all_pr_comments, override_comments
+    return all_pr_comments, all_override_comments
 
 
 def detect_override_comment(comment, pr):
     """
     Inspect `comment`, see if it is a Mergebot CI check override comment.
+
+    Note: Mergebot itself seems to have the following command detection logic:
+
+        1) The first to tokens of the command are removed:
+
+            return contents.replace(_BOT_NAME, "").replace(
+                BotCommand.OVERRIDE_STATUS_KEY, "").strip()
+
+        2) The remainder is called `override_status_value`. The status key and
+           the JIRA ticket ID are extracted based on whitespace splitting from
+           the right:
+
+            status_key, jira_id = override_status_value.rsplit(maxsplit=1)
+
+    (see https://github.com/mesosphere/mergebot/blob/fbaeecf/mergebot/mergebot/actions/override_status.py#L31)
+
+    That is, if a status key / check name in an issued override command contains
+    whitespace it is invalid. In day-to-day business, we seem to have these keys
+    with whitespace, and users use them. One goal here is to detect usage of
+    invalid status keys / check names (those that contain whitespace).
 
     Args:
         comment: an object of type `github.IssueComment.IssueComment`
@@ -200,7 +234,8 @@ def detect_override_comment(comment, pr):
     text = comment.body.strip()
     linecount = len(text.splitlines())
 
-    # A checkname can seemingly have whitespace in it, as in this example:
+    # A checkname is sometimes submitted with whitespace in it, as in this
+    # example (taken verbatim from a real-world comment):
     #
     #     @mesosphere-mergebot override-status "teamcity/dcos/test/upgrade/disabled -> permissive" DCOS-17633
     #
@@ -217,9 +252,12 @@ def detect_override_comment(comment, pr):
     # ticket
     #
     # parses checkname to `Foo1 foo2\nbar` and jiraticket to `ticket`.
+    #
+    # Additionally, also consider checknames which start/end with `"` (these
+    # are invalid, and the goal is to detect them).
     regex = (
         '@mesosphere-mergebot(\s+)override-status(\s+)'
-        '(?P<checkname>[A-Za-z]+.*[A-Za-z]+)(\s+)(?P<jiraticket>\S+)'
+        '(?P<checkname>["A-Za-z]+.*["A-Za-z]+)(\s+)(?P<jiraticket>\S+)'
     )
 
     match = re.search(regex, text, re.DOTALL)
@@ -231,13 +269,10 @@ def detect_override_comment(comment, pr):
             return None
 
         if not text.startswith('@mesosphere-mergebot'):
-            log.info('Ignore conversation about override comment:\n%s\n', text)
+            # This is assumed to be a conversation about an override command,
+            # such as one user asking another user to submit one.
+            # log.info('Ignore conversation about override comment:\n%s\n', text)
             return None
-
-        if linecount > 1:
-            ...
-            #log.info('Mergebot override in multi-line comment:\n%r', text)
-            #log.info(pr)
 
     if match:
 
@@ -253,12 +288,11 @@ def detect_override_comment(comment, pr):
         if '/' in ticket:
             return None
 
-        if '>' in ticket:
-            print('YYYYY')
-            log.info(text)
-            log.info('ticket: `%r`', ticket)
-            log.info('checkname: `%r`', match.group('checkname'))
+        if linecount > 1:
+            log.info('Mergebot override in multi-line comment:\n%r', text)
 
+        # Create the override comment data structure used elsewhere in the
+        # program.
         override_comment = {
             'prnumber': pr.number,
             'checkname': match.group('checkname').strip(),
@@ -268,7 +302,6 @@ def detect_override_comment(comment, pr):
 
         return override_comment
     return None
-
 
 
 def analyze_merged_prs(prs):
