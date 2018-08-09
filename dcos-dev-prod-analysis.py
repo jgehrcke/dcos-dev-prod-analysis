@@ -76,7 +76,8 @@ def analyze_pr_comments(prs):
 
     all_pr_comments, all_override_comments = identify_override_comments(prs)
 
-    # (not so) useful all-time stats. Well, useful for sanity-checking the data.
+    # All-time stats. These are for example useful for sanity-checking the
+    # raw data, and the string parsing heuristics.
     log.info('Build histograms for all override comments, for sanity check')
     print('\n** Histogram over number of issue comments per pull request:')
     counter = Counter([len(pr._issue_comments) for pr in prs])
@@ -162,6 +163,11 @@ def build_histograms_from_ocs_last_n_days(override_comments, n):
 
 
 def build_histograms_from_ocs(override_comments):
+    comments_with_whitespace_in_checkname = [
+        c for c in override_comments if len(c['checkname'].split()) > 1]
+    nbr_invalid = len(comments_with_whitespace_in_checkname)
+    print(f'   Comments with invalid checkname (whitespace): {nbr_invalid}')
+
     topn = 10
     print(f'   Top {topn} JIRA tickets used in override comments')
     counter = Counter([oc['ticket'] for oc in override_comments])
