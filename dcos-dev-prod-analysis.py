@@ -162,95 +162,113 @@ def identify_mergebot_override_comments(prs):
 
     # Analyze PR comments, look for status overrides.
     override_comments = []
-    convs_about_override_comments = 0
     for pr in prs:
-
         # Dynamically load the override comments onto each PR object.
         pr._override_comments = []
-
         for comment in pr._issue_comments:
-            # Strip leading and trailing whitespace.
-            text = comment.body.strip()
-            linecount = len(text.splitlines())
-
-            # A checkname can seemingly have whitespace in it, as in this example:
-            #
-            #     @mesosphere-mergebot override-status "teamcity/dcos/test/upgrade/disabled -> permissive" DCOS-17633
-            #
-            # Not sure if that is valid from Mergebot's point of view, but it is
-            # real-world data. Note(JP): the `[A-Za-z]+.*[A-Za-z]+` in the
-            # checkname regex group is supposed to make sure that the checkname
-            # starts with a word character, ends with a word character, but is
-            # otherwise allowed to contain e.g. whitespace characters, even
-            # newlines (as of the DOTALL option). Tested this on
-            # https://pythex.org/ The following test string:
-            #
-            # @mesosphere-mergebot override-status Foo1 foo2
-            # bar
-            # ticket
-            #
-            # parses checkname to `Foo1 foo2\nbar` and jiraticket to `ticket`.
-            regex = '@mesosphere-mergebot(\s+)override-status(\s+)(?P<checkname>[A-Za-z]+.*[A-Za-z]+)(\s+)(?P<jiraticket>\S+)'
-            match = re.search(regex, text, re.DOTALL)
-
-            if match is not None:
-
-                if 'This repo has @mesosphere-mergebot integration' in text:
-                    # This is Mergebot's help text comment.
-                    continue
-
-                if not text.startswith('@mesosphere-mergebot'):
-                    # This is not an actual override command but just a
-                    # conversation about one.
-                    log.info('Ignore override mention:\nXXXX\n%s\n', text)
-                    convs_about_override_comments += 1
-                    continue
-
-                if linecount > 1:
-                    ...
-                    #log.info('Mergebot override in multi-line comment:\n%r', text)
-                    #log.info(pr)
-
-            if match:
-
-                # Remove URL prefix from ticket name (if present).
-                prefix = 'https://jira.mesosphere.com/browse/'
-                ticket = match.group('jiraticket')
-                if ticket.startswith(prefix):
-                    ticket = ticket[len(prefix):]
-
-                # Sometimes people have gotten the order of checkname and ticket
-                # wrong. Checknames usually contain slashes. Ticket names don't
-                # (at this point).
-                if '/' in ticket:
-                    continue
-
-                if '>' in ticket:
-                    print('YYYYY')
-                    log.info(text)
-                    log.info('ticket: `%r`', ticket)
-                    log.info('checkname: `%r`', match.group('checkname'))
-
-                override_comment = {
-                    'prnumber': pr.number,
-                    'checkname': match.group('checkname').strip(),
-                    'ticket': ticket,
-                    'comment_obj': comment
-                }
-
-                override_comments.append(override_comment)
-                pr._override_comments.append(override_comment)
+            oc = detect_override_comment(comment, pr)
+            if oc is not None:
+                override_comments.append(oc)
+                pr._override_comments.append(oc)
 
     log.info('Number of override comments: %s', len(override_comments))
-    log.info(
-        'Identified %s mentions as conversations about override comments and '
-        'ignored them', convs_about_override_comments
-    )
+    # log.info(
+    #     'Identified %s mentions as conversations about override comments and '
+    #     'ignored them', convs_about_override_comments
+    # )
 
     # Note: a (desired) side effect here is that `prs` have been modified
     # in-place with the `_override_comments` property. Do not return this to
     # make the side effect more explicit.
     return all_pr_comments, override_comments
+
+
+def detect_override_comment(comment, pr):
+    """
+    Inspect `comment`, see if it is a Mergebot CI check override comment.
+
+    Args:
+        comment: an object of type `github.IssueComment.IssueComment`
+        pr: an object of type `github.PullRequest.PullRequest`
+
+    Returns:
+        A dictionary representing the override comment or `None` if no override
+        comment was detected.
+    """
+    # Get comment body (text), strip leading and trailing whitespace before
+    # further processing.
+    text = comment.body.strip()
+    linecount = len(text.splitlines())
+
+    # A checkname can seemingly have whitespace in it, as in this example:
+    #
+    #     @mesosphere-mergebot override-status "teamcity/dcos/test/upgrade/disabled -> permissive" DCOS-17633
+    #
+    # Not sure if that is valid from Mergebot's point of view, but it is
+    # real-world data. Note(JP): the `[A-Za-z]+.*[A-Za-z]+` in the
+    # checkname regex group is supposed to make sure that the checkname
+    # starts with a word character, ends with a word character, but is
+    # otherwise allowed to contain e.g. whitespace characters, even
+    # newlines (as of the DOTALL option). Tested this on
+    # https://pythex.org/ The following test string:
+    #
+    # @mesosphere-mergebot override-status Foo1 foo2
+    # bar
+    # ticket
+    #
+    # parses checkname to `Foo1 foo2\nbar` and jiraticket to `ticket`.
+    regex = (
+        '@mesosphere-mergebot(\s+)override-status(\s+)'
+        '(?P<checkname>[A-Za-z]+.*[A-Za-z]+)(\s+)(?P<jiraticket>\S+)'
+    )
+
+    match = re.search(regex, text, re.DOTALL)
+
+    if match is not None:
+
+        if 'This repo has @mesosphere-mergebot integration' in text:
+            # This is Mergebot's help text comment.
+            return None
+
+        if not text.startswith('@mesosphere-mergebot'):
+            log.info('Ignore conversation about override comment:\n%s\n', text)
+            return None
+
+        if linecount > 1:
+            ...
+            #log.info('Mergebot override in multi-line comment:\n%r', text)
+            #log.info(pr)
+
+    if match:
+
+        # Remove URL prefix from ticket name (if present).
+        prefix = 'https://jira.mesosphere.com/browse/'
+        ticket = match.group('jiraticket')
+        if ticket.startswith(prefix):
+            ticket = ticket[len(prefix):]
+
+        # Sometimes people have gotten the order of checkname and ticket
+        # wrong. Checknames usually contain slashes. Ticket names don't
+        # (at this point).
+        if '/' in ticket:
+            return None
+
+        if '>' in ticket:
+            print('YYYYY')
+            log.info(text)
+            log.info('ticket: `%r`', ticket)
+            log.info('checkname: `%r`', match.group('checkname'))
+
+        override_comment = {
+            'prnumber': pr.number,
+            'checkname': match.group('checkname').strip(),
+            'ticket': ticket,
+            'comment_obj': comment
+        }
+
+        return override_comment
+    return None
+
 
 
 def analyze_merged_prs(prs):
