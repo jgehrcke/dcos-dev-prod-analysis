@@ -141,9 +141,10 @@ def build_histograms_from_ocs_in_recent_prs(prs, max_age_days):
 
 
 def build_histograms_from_ocs_in_prs(prs):
-    print('   Top N number of override commands issued per pull request:')
+    topn = 10
+    print(f'   Top {topn} number of override commands issued per pull request:')
     counter = Counter([len(pr._override_comments) for pr in prs])
-    for item, count in counter.most_common(10):
+    for item, count in counter.most_common(topn):
         print('{:>8} PR(s) have {:>3} override comment(s)'.format(count, item))
 
 
@@ -161,14 +162,15 @@ def build_histograms_from_ocs_last_n_days(override_comments, n):
 
 
 def build_histograms_from_ocs(override_comments):
-    print('   Top N JIRA tickets used in override comments')
+    topn = 10
+    print(f'   Top {topn} JIRA tickets used in override comments')
     counter = Counter([oc['ticket'] for oc in override_comments])
-    for item, count in counter.most_common(10):
+    for item, count in counter.most_common(topn):
         print('{:>8} overrides refer to JIRA ticket {:>3}'.format(count, item))
 
-    print('   Top N CI check names used in override comments')
+    print(f'   Top {topn} CI check names used in override comments')
     counter = Counter([oc['checkname'] for oc in override_comments])
-    for item, count in counter.most_common(10):
+    for item, count in counter.most_common(topn):
         print('{:>8} overrides refer to CI check {}'.format(count, item))
 
 
