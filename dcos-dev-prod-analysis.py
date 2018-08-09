@@ -26,6 +26,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 
+NOW = datetime.now()
 log = logging.getLogger()
 logging.basicConfig(
     level=logging.INFO,
@@ -90,50 +91,54 @@ def analyze_pr_comments(prs):
     # more relevant in practice.
 
     print('\n\n\n* Override comment analysis (all-time stats)')
-    build_histograms_from_ocs_last_n_days(all_override_comments, 9999)
-    build_histograms_from_ocs_in_recent_prs(prs, 9999)
+    analyze_overrides_last_n_days(all_override_comments, 9999)
+    analyze_overrides_in_recent_prs(prs, 9999)
 
     print('\n\n\n* Override comment analysis (last 30 days)')
-    build_histograms_from_ocs_last_n_days(all_override_comments, 30)
-    build_histograms_from_ocs_in_recent_prs(prs, 30)
+    analyze_overrides_last_n_days(all_override_comments, 30)
+    analyze_overrides_in_recent_prs(prs, 30)
 
     print('\n\n\n* Override comment analysis (last 10 days)')
-    build_histograms_from_ocs_last_n_days(all_override_comments, 10)
-    build_histograms_from_ocs_in_recent_prs(prs, 10)
+    analyze_overrides_last_n_days(all_override_comments, 10)
+    analyze_overrides_in_recent_prs(prs, 10)
 
     print('\n\n\n* Override comment analysis (last 5 days)')
-    build_histograms_from_ocs_last_n_days(all_override_comments, 5)
-    build_histograms_from_ocs_in_recent_prs(prs, 5)
+    analyze_overrides_last_n_days(all_override_comments, 5)
+    analyze_overrides_in_recent_prs(prs, 5)
 
-    # Find first occurrence of individual override tickets, and show the ones
-    # that were used for the first time within the last N days.
+    # Find first occurrence of individual override JIRA tickets, and show the
+    # ones that were used for the first time within the last N days (this
+    # identifies new flakes).
 
     collector = defaultdict(list)
     for comment in all_override_comments:
         collector[comment['ticket']].append(comment['comment_obj'].created_at)
 
+    max_age_days = 10
+    print(f'\n\n\n* JIRA tickets from override commands used for the first time within the last {max_age_days} days')
     for ticket, created_dates in collector.items():
         earliest_date = min(created_dates)
-        log.info('Earliest appearance of ticket %s: %s', ticket, earliest_date)
+        age = NOW - earliest_date
+        if age.total_seconds() < 60 * 60 * 24 * max_age_days:
+            print(f'   - {ticket}')
 
 
-def build_histograms_from_ocs_in_recent_prs(prs, max_age_days):
+def analyze_overrides_in_recent_prs(prs, max_age_days):
     """
     Find pull requests not older than `max_age_days` and extract all override
     commands issued in them. Perform a statistical analysis on this set of
     override commands.
     """
     print(f'** Histograms from override comments in PRs younger than {max_age_days} days')
-    now = datetime.now()
     prs_to_analyze = []
     for pr in prs:
-        age = now - pr.created_at
+        age = NOW - pr.created_at
         if age.total_seconds() < 60 * 60 * 24 * max_age_days:
             prs_to_analyze.append(pr)
-    build_histograms_from_ocs_in_prs(prs_to_analyze)
+    analyze_overrides_in_prs(prs_to_analyze)
 
 
-def build_histograms_from_ocs_in_prs(prs):
+def analyze_overrides_in_prs(prs):
     topn = 10
     print(f'   Top {topn} number of override commands issued per pull request:')
     counter = Counter([len(pr._override_comments) for pr in prs])
@@ -141,13 +146,12 @@ def build_histograms_from_ocs_in_prs(prs):
         print('{:>8} PR(s) have {:>3} override comment(s)'.format(count, item))
 
 
-def build_histograms_from_ocs_last_n_days(override_comments, n):
+def analyze_overrides_last_n_days(override_comments, n):
     print(f'** Histograms from override comments younger than {n} days')
-    now = datetime.now()
     max_age_days = n
     ocs_to_analyze = []
     for oc in override_comments:
-        age = now - oc['comment_obj'].created_at
+        age = NOW - oc['comment_obj'].created_at
         if age.total_seconds() < 60 * 60 * 24 * max_age_days:
             ocs_to_analyze.append(oc)
     print(f'** Number of override comments: {len(ocs_to_analyze)}')
