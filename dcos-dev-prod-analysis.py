@@ -41,12 +41,6 @@ logging.basicConfig(format=logfmt, datefmt=datefmt, level=logging.INFO)
 log = logging.getLogger()
 
 
-def load_prs_from_file(filepath):
-    log.info('Unpickle from file: %s', filepath)
-    with open(filepath, 'rb') as f:
-        return pickle.loads(f.read())
-
-
 def main():
 
     prs_downstream = load_prs_from_file(
@@ -55,54 +49,74 @@ def main():
     prs_upstream = load_prs_from_file(
         'dcos_pull-requests-with-comments.pickle')
 
-
-    # Perform override command analysis for all pull requests (this goes back
-    # into the past for quite some time).
-    prs_for_override_cmd_analysis = [
+    # Perform override command analysis for all pull requests.
+    prs_for_comment_analysis = [
         pr for pr in
         itertools.chain(prs_downstream.values(), prs_upstream.values())
     ]
-    analyze_mergebot_override_commands(prs_for_override_cmd_analysis)
-
-    # Perform override command analysis for all pull requests created in the
-    # last 30 days.
+    analyze_pr_comments(prs_for_comment_analysis)
 
     # analyze_merged_prs(allprs)
 
 
-def analyze_mergebot_override_commands(prs):
+def analyze_pr_comments(prs):
+    """
+    Analyze the issue comments in all pull request objects in `prs`.
 
-    log.info('Perform Mergebot override command analysis for %s PRs', len(prs))
+    Args:
+        prs: a `list` of `github.PullRequest.PullRequest` objects, whereas
+            each of these is expected to be enriched with the non-canonical
+            `_issue_comments` attribute, expected to be a list of objects of
+            type `github.IssueComment.IssueComment`, which are all the normal
+            comments on the pull request (e.g. review comments are not
+            included).
+    """
 
-    all_pr_comments, override_comments = identify_mergebot_override_comments(prs)
+    log.info('Perform comment analysis for %s PRs', len(prs))
 
-    # All-time stats.
-    log.info('Histogram over number of issue comments per pull request')
+    all_pr_comments, all_override_comments = identify_override_comments(prs)
+
+    # (not so) useful all-time stats. Well, useful for sanity-checking the data.
+    log.info('Build histograms for all override comments, for sanity check')
+    print('\n** Histogram over number of issue comments per pull request:')
     counter = Counter([len(pr._issue_comments) for pr in prs])
     for item, count in counter.most_common(10):
         print('{:>8} PR(s) have {:>3} comment(s)'.format(count, item))
 
-    log.info(
-        'Histogram over number of override commands issued per individual '
-        'pull request'
-    )
-    counter = Counter([len(pr._override_comments) for pr in prs])
-    for item, count in counter.most_common(10):
-        print('{:>8} PR(s) have {:>3} override comment(s)'.format(count, item))
-    log.info('Build histograms for all override comments')
-    build_histograms_from_override_comments(override_comments)
+    print('\n** Histogram over JIRA ticket referred to in all override '
+          'comments, all data for sanity check')
+    print(Counter([oc['ticket'] for oc in all_override_comments]))
+
+    print('\n** Histogram over CI check name referred to in all override '
+        'comments, all data for sanity check')
+    print(Counter([oc['checkname'] for oc in all_override_comments]))
+
+    print('\n\n\n* Override comment analysis (all-time stats)')
+    build_histograms_from_ocs_last_n_days(all_override_comments, 9999)
+    build_histograms_from_ocs_in_recent_prs(prs, 9999)
 
     # Stats extracted from a more narrow time window from the recent past, more
     # relevant in practice.
 
-    build_histograms_from_override_comments_last_n_days(override_comments, 30)
-    build_histograms_from_override_comments_last_n_days(override_comments, 10)
+    print('\n\n\n* Override comment analysis (last 30 days)')
+    build_histograms_from_ocs_last_n_days(all_override_comments, 30)
+    build_histograms_from_ocs_in_recent_prs(prs, 30)
+
+    print('\n\n\n* Override comment analysis (last 10 days)')
+    build_histograms_from_ocs_last_n_days(all_override_comments, 10)
+    build_histograms_from_ocs_in_recent_prs(prs, 10)
+
+    #build_histograms_from_ocs_in_recent_prs(prs, 30)
+    #build_histograms_from_ocs_in_recent_prs(prs, 10)
+    #build_histograms_from_ocs_last_n_days(all_override_comments, 30)
+    #build_histograms_from_ocs_last_n_days(all_override_comments, 10)
+
 
     # Find first occurrence of individual override tickets, and show the ones
     # that were used for the first time within the last N days.
 
     collector = defaultdict(list)
-    for comment in override_comments:
+    for comment in all_override_comments:
         collector[comment['ticket']].append(comment['comment_obj'].created_at)
 
     for ticket, created_dates in collector.items():
@@ -110,36 +124,55 @@ def analyze_mergebot_override_commands(prs):
         log.info('Earliest appearance of ticket %s: %s', ticket, earliest_date)
 
 
+def build_histograms_from_ocs_in_recent_prs(prs, max_age_days):
+    """
+    Find pull requests not older than `max_age_days` and extract all override
+    commands issued in them. Perform a statistical analysis on this set of
+    override commands.
+    """
+    print(f'** Histograms from override comments in PRs younger than {max_age_days} days')
+    now = datetime.now()
+    prs_to_analyze = []
+    for pr in prs:
+        age = now - pr.created_at
+        if age.total_seconds() < 60 * 60 * 24 * max_age_days:
+            prs_to_analyze.append(pr)
+    build_histograms_from_ocs_in_prs(prs_to_analyze)
 
-def build_histograms_from_override_comments_last_n_days(override_comments, n):
-    log.info('Build histograms for override comments younger than %s days', n)
+
+def build_histograms_from_ocs_in_prs(prs):
+    print('   Top N number of override commands issued per pull request:')
+    counter = Counter([len(pr._override_comments) for pr in prs])
+    for item, count in counter.most_common(10):
+        print('{:>8} PR(s) have {:>3} override comment(s)'.format(count, item))
+
+
+def build_histograms_from_ocs_last_n_days(override_comments, n):
+    print(f'** Histograms from override comments younger than {n} days')
     now = datetime.now()
     max_age_days = n
-    override_comments_to_analyze = []
+    ocs_to_analyze = []
     for oc in override_comments:
         age = now - oc['comment_obj'].created_at
         if age.total_seconds() < 60 * 60 * 24 * max_age_days:
-            override_comments_to_analyze.append(oc)
-    build_histograms_from_override_comments(override_comments_to_analyze)
+            ocs_to_analyze.append(oc)
+    print(f'** Number of override comments: {len(ocs_to_analyze)}')
+    build_histograms_from_ocs(ocs_to_analyze)
 
 
-def build_histograms_from_override_comments(override_comments):
-
-    log.info('Histogram over JIRA ticket referred to in the override comments')
+def build_histograms_from_ocs(override_comments):
+    print('   Top N JIRA tickets used in override comments')
     counter = Counter([oc['ticket'] for oc in override_comments])
-    print(Counter)
     for item, count in counter.most_common(10):
-        print('{:>8} override comments refer to ticket {:>3}'.format(count, item))
+        print('{:>8} overrides refer to JIRA ticket {:>3}'.format(count, item))
 
-
-    log.info('Histogram over CI check name referred to in the override comments')
+    print('   Top N CI check names used in override comments')
     counter = Counter([oc['checkname'] for oc in override_comments])
-    print(counter)
     for item, count in counter.most_common(10):
-        print('{:>8} override comments refer to CI check {}'.format(count, item))
+        print('{:>8} overrides refer to CI check {}'.format(count, item))
 
 
-def identify_mergebot_override_comments(prs):
+def identify_override_comments(prs):
     """
     Extract all Mergebot override comments from `prs`.
 
@@ -199,7 +232,10 @@ def identify_mergebot_override_comments(prs):
 
 def detect_override_comment(comment, pr):
     """
-    Inspect `comment`, see if it is a Mergebot CI check override comment.
+    Inspect `comment`, see if it is a Mergebot CI check override comment. Also
+    identify override comment attempts (legit attempts to issue an override
+    comment), and try to isolate/ignore conversations about override comments
+    (where there was no attempt to actually issue an override comment).
 
     Note: Mergebot itself seems to have the following command detection logic:
 
@@ -289,7 +325,8 @@ def detect_override_comment(comment, pr):
             return None
 
         if linecount > 1:
-            log.info('Mergebot override in multi-line comment:\n%r', text)
+            ...
+            # log.info('Mergebot override in multi-line comment:\n%r', text)
 
         # Create the override comment data structure used elsewhere in the
         # program.
@@ -489,6 +526,12 @@ def matplotlib_config():
     #mpl.rcParams['font.size'] = 12
 
     plt.style.use('ggplot')
+
+
+def load_prs_from_file(filepath):
+    log.info('Unpickle from file: %s', filepath)
+    with open(filepath, 'rb') as f:
+        return pickle.loads(f.read())
 
 
 if __name__ == "__main__":
