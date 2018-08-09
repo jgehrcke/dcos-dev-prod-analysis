@@ -26,14 +26,13 @@ import time
 import multiprocessing
 import pickle
 
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 
 import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
-plt.style.use('ggplot')
 
 
 logfmt = "%(asctime)s.%(msecs)03d %(name)s %(levelname)s: %(message)s"
@@ -77,6 +76,7 @@ def analyze_mergebot_override_commands(prs):
 
     all_pr_comments, override_comments = identify_mergebot_override_comments(prs)
 
+    # All-time stats.
     log.info('Histogram over number of issue comments per pull request')
     counter = Counter([len(pr._issue_comments) for pr in prs])
     for item, count in counter.most_common(10):
@@ -89,12 +89,26 @@ def analyze_mergebot_override_commands(prs):
     counter = Counter([len(pr._override_comments) for pr in prs])
     for item, count in counter.most_common(10):
         print('{:>8} PR(s) have {:>3} override comment(s)'.format(count, item))
-
     log.info('Build histograms for all override comments')
     build_histograms_from_override_comments(override_comments)
 
+    # Stats extracted from a more narrow time window from the recent past, more
+    # relevant in practice.
+
     build_histograms_from_override_comments_last_n_days(override_comments, 30)
     build_histograms_from_override_comments_last_n_days(override_comments, 10)
+
+    # Find first occurrence of individual override tickets, and show the ones
+    # that were used for the first time within the last N days.
+
+    collector = defaultdict(list)
+    for comment in override_comments:
+        collector[comment['ticket']].append(comment['comment_obj'].created_at)
+
+    for ticket, created_dates in collector.items():
+        earliest_date = min(created_dates)
+        log.info('Earliest appearance of ticket %s: %s', ticket, earliest_date)
+
 
 
 def build_histograms_from_override_comments_last_n_days(override_comments, n):
@@ -113,8 +127,9 @@ def build_histograms_from_override_comments(override_comments):
 
     log.info('Histogram over JIRA ticket referred to in the override comments')
     counter = Counter([oc['ticket'] for oc in override_comments])
+    print(Counter)
     for item, count in counter.most_common(10):
-        print('{:>8} override comments refer to issue {:>3}'.format(count, item))
+        print('{:>8} override comments refer to ticket {:>3}'.format(count, item))
 
 
     log.info('Histogram over CI check name referred to in the override comments')
@@ -159,13 +174,13 @@ def identify_mergebot_override_comments(prs):
             linecount = len(text.splitlines())
 
 
-            # A checkname can seemingly have whitespace in it, as in this example:
             # @mesosphere-mergebot override-status
             # "teamcity/dcos/test/upgrade/disabled -> permissive" DCOS-17633
             # (not sure if that is valid from Mergebot's point of view, but it
             # is real-world data)
             regex = '@mesosphere-mergebot(\s+)override-status(\s+)(?P<checkname>.+)(\s+)(?P<jiraticket>\S+)'
             match = re.search(regex, text)
+
 
             if match is not None:
 
@@ -199,9 +214,11 @@ def identify_mergebot_override_comments(prs):
                 if '/' in ticket:
                     continue
 
-                #if '->' in ticket:
-                #    print('YYY')
-                #    log.info(text)
+                if '>' in ticket:
+                    print('YYYYY')
+                    log.info(text)
+                    log.info('ticket: `%r`', ticket)
+                    log.info('checkname: `%r`', match.group('checkname'))
 
                 override_comment = {
                     'prnumber': pr.number,
@@ -408,6 +425,8 @@ def matplotlib_config():
     matplotlib.rcParams['figure.dpi'] = 100
     matplotlib.rcParams['savefig.dpi'] = 150
     #mpl.rcParams['font.size'] = 12
+
+    plt.style.use('ggplot')
 
 
 if __name__ == "__main__":
