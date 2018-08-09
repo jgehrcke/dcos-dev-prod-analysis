@@ -13,32 +13,25 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
-
-import argparse
 import logging
 import itertools
-import os
 import re
-import subprocess
-import sys
-import textwrap
-import time
-import multiprocessing
 import pickle
 
 from collections import Counter, defaultdict
 from datetime import datetime
 
-import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 
 
-logfmt = "%(asctime)s.%(msecs)03d %(name)s %(levelname)s: %(message)s"
-datefmt = "%y%m%d-%H:%M:%S"
-logging.basicConfig(format=logfmt, datefmt=datefmt, level=logging.INFO)
 log = logging.getLogger()
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s.%(msecs)03d %(levelname)s: %(message)s",
+    datefmt="%y%m%d-%H:%M:%S"
+    )
 
 
 def main():
@@ -89,15 +82,16 @@ def analyze_pr_comments(prs):
     print(Counter([oc['ticket'] for oc in all_override_comments]))
 
     print('\n** Histogram over CI check name referred to in all override '
-        'comments, all data for sanity check')
+          'comments, all data for sanity check')
     print(Counter([oc['checkname'] for oc in all_override_comments]))
+
+    # Now output the same kinds of stats for different periods of times. Stats
+    # extracted from a more narrow time window from the recent past are probably
+    # more relevant in practice.
 
     print('\n\n\n* Override comment analysis (all-time stats)')
     build_histograms_from_ocs_last_n_days(all_override_comments, 9999)
     build_histograms_from_ocs_in_recent_prs(prs, 9999)
-
-    # Stats extracted from a more narrow time window from the recent past, more
-    # relevant in practice.
 
     print('\n\n\n* Override comment analysis (last 30 days)')
     build_histograms_from_ocs_last_n_days(all_override_comments, 30)
@@ -107,11 +101,9 @@ def analyze_pr_comments(prs):
     build_histograms_from_ocs_last_n_days(all_override_comments, 10)
     build_histograms_from_ocs_in_recent_prs(prs, 10)
 
-    #build_histograms_from_ocs_in_recent_prs(prs, 30)
-    #build_histograms_from_ocs_in_recent_prs(prs, 10)
-    #build_histograms_from_ocs_last_n_days(all_override_comments, 30)
-    #build_histograms_from_ocs_last_n_days(all_override_comments, 10)
-
+    print('\n\n\n* Override comment analysis (last 5 days)')
+    build_histograms_from_ocs_last_n_days(all_override_comments, 5)
+    build_histograms_from_ocs_in_recent_prs(prs, 5)
 
     # Find first occurrence of individual override tickets, and show the ones
     # that were used for the first time within the last N days.
@@ -356,11 +348,11 @@ def analyze_merged_prs(prs):
     log.info('Number of filtered pull requests: %s', len(filtered_prs))
 
     log.info('Filter pull requests not created by mergebot.')
-    filtered_prs =  [pr for pr in filtered_prs if 'mergebot' not in pr.user.login]
+    filtered_prs = [pr for pr in filtered_prs if 'mergebot' not in pr.user.login]
     log.info('Number of filtered pull requests: %s', len(filtered_prs))
 
     log.info('Filter pull requests not having `Train` in title.')
-    filtered_prs =  [pr for pr in filtered_prs if 'train' not in pr.title.lower()]
+    filtered_prs = [pr for pr in filtered_prs if 'train' not in pr.title.lower()]
     log.info('Number of filtered pull requests: %s', len(filtered_prs))
 
     # Proceed with analyzing only those pull requests that were not created
@@ -376,7 +368,7 @@ def analyze_merged_prs(prs):
         {
             'created_at': [pr.created_at for pr in filtered_prs],
             'openseconds': [
-                (pr.merged_at - pr.created_at).total_seconds() for \
+                (pr.merged_at - pr.created_at).total_seconds() for
                 pr in filtered_prs
             ]
         },
@@ -415,10 +407,10 @@ def plot_quality(df):
     plt.xlabel('Time')
     plt.ylabel('Throughput [1/day] / latency [day]')
     set_title('PR integration quality for PRs in mesosphere/dcos-enterprise')
-    #subtitle = 'Freq spec from narrow rolling request rate -- ' + \
-    #    matcher.subtitle
-    #set_subtitle('Raw data')
-    plt.tight_layout(rect=(0,0,1,0.95))
+    # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
+    #     matcher.subtitle
+    # set_subtitle('Raw data')
+    plt.tight_layout(rect=(0, 0, 1, 0.95))
 
 
 def plot_throughput(filtered_prs):
@@ -438,22 +430,22 @@ def plot_throughput(filtered_prs):
 
     rollingwindow = df['foo'].rolling('21d')
     throughput = rollingwindow.count()/21.0
-    #stddev = rollingwindow.std()
+    # stddev = rollingwindow.std()
 
     throughput.plot(
         linestyle='dashdot',
-        #linestyle='None',
-        #marker='.',
+        # linestyle='None',
+        # marker='.',
         color='black',
         markersize=5,
     )
     plt.xlabel('Time')
     plt.ylabel('Throughput [1/day]')
     set_title('Pull request throughput for PRs in mesosphere/dcos-enterprise')
-    #subtitle = 'Freq spec from narrow rolling request rate -- ' + \
-    #    matcher.subtitle
-    #set_subtitle('Raw data')
-    plt.tight_layout(rect=(0,0,1,0.95))
+    # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
+    #     matcher.subtitle
+    # set_subtitle('Raw data')
+    plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     return throughput
 
@@ -461,7 +453,7 @@ def plot_throughput(filtered_prs):
 def plot_latency(df):
 
     df['opendays'].plot(
-        #linestyle='dashdot',
+        # linestyle='dashdot',
         linestyle='None',
         color='gray',
         marker='.',
@@ -471,35 +463,34 @@ def plot_latency(df):
     plt.xlabel('Pull request creation time')
     plt.ylabel('Time-to-merge latency [day]')
     set_title('Time-to-merge for PRs in mesosphere/dcos-enterprise')
-    #subtitle = 'Freq spec from narrow rolling request rate -- ' + \
+    # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #    matcher.subtitle
     set_subtitle('Raw data')
-    plt.tight_layout(rect=(0,0,1,0.95))
+    plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     rollingwindow = df['opendays'].rolling('21d')
     mean = rollingwindow.mean()
 
     mean.plot(
         linestyle='solid',
-        #linestyle='None',
+        # linestyle='None',
         color='black',
-        #marker='.',
-        #markersize=1,
-        #markeredgecolor='gray'
+        # marker='.',
+        # markersize=1,
+        # markeredgecolor='gray'
     )
 
-    #stddev = rollingwindow.std()
+    # stddev = rollingwindow.std()
 
-
-    #plt.figure()
+    # plt.figure()
 
     # Rolling window of one week width,
 
-    #rollingwindow = df['opendays'].rolling('7d')
-    #mean = rollingwindow.mean()
-    #stddev = rollingwindow.std()
+    # rollingwindow = df['opendays'].rolling('7d')
+    # mean = rollingwindow.mean()
+    # stddev = rollingwindow.std()
 
-    #mean.plot()
+    # mean.plot()
 
     return mean
 
@@ -531,7 +522,7 @@ def matplotlib_config():
     matplotlib.rcParams['figure.figsize'] = [10.5, 7.0]
     matplotlib.rcParams['figure.dpi'] = 100
     matplotlib.rcParams['savefig.dpi'] = 150
-    #mpl.rcParams['font.size'] = 12
+    # mpl.rcParams['font.size'] = 12
 
     plt.style.use('ggplot')
 
