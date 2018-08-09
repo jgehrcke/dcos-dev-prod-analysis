@@ -42,8 +42,6 @@ logging.basicConfig(format=logfmt, datefmt=datefmt, level=logging.INFO)
 log = logging.getLogger()
 
 
-
-
 def load_prs_from_file(filepath):
     log.info('Unpickle from file: %s', filepath)
     with open(filepath, 'rb') as f:
@@ -95,12 +93,17 @@ def analyze_mergebot_override_commands(prs):
     log.info('Build histograms for all override comments')
     build_histograms_from_override_comments(override_comments)
 
-    log.info('Build histograms for override comments younger than 30 days')
+    build_histograms_from_override_comments_last_n_days(override_comments, 30)
+    build_histograms_from_override_comments_last_n_days(override_comments, 10)
+
+
+def build_histograms_from_override_comments_last_n_days(override_comments, n):
+    log.info('Build histograms for override comments younger than %s days', n)
     now = datetime.now()
-    max_age_days = 30
+    max_age_days = n
     override_comments_to_analyze = []
     for oc in override_comments:
-        age = now - oc.created_at
+        age = now - oc['comment_obj'].created_at
         if age.total_seconds() < 60 * 60 * 24 * max_age_days:
             override_comments_to_analyze.append(oc)
     build_histograms_from_override_comments(override_comments_to_analyze)
@@ -150,9 +153,9 @@ def identify_mergebot_override_comments(prs):
         # Dynamically load the override comments onto each PR object.
         pr._override_comments = []
 
-        for c in pr._issue_comments:
+        for comment in pr._issue_comments:
             # Strip leading and trailing whitespace.
-            text = c.body.strip()
+            text = comment.body.strip()
             linecount = len(text.splitlines())
 
 
@@ -203,7 +206,8 @@ def identify_mergebot_override_comments(prs):
                 override_comment = {
                     'prnumber': pr.number,
                     'checkname': match.group('checkname').strip(),
-                    'ticket': ticket
+                    'ticket': ticket,
+                    'comment_obj': comment
                 }
 
                 override_comments.append(override_comment)
