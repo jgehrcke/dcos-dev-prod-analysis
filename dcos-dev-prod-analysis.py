@@ -124,7 +124,7 @@ def analyze_pr_comments(prs):
 
     log.info('Rewrite JIRA ticket IDs in the Markdown report')
     report_md_text = override_report.getvalue()
-    re.sub(
+    report_md_text = re.sub(
         "[A-Z_]+-[0-9]+", "[\g<0>](https://jira.mesosphere.com/\g<0>)",
         report_md_text
     )
@@ -149,15 +149,20 @@ def analyze_overrides(heading, max_age_days, all_override_comments, prs):
     collector = defaultdict(list)
     for comment in all_override_comments:
         collector[comment['ticket']].append(comment['comment_obj'].created_at)
-    max_age_days = 10
     reportfragment.write(f'JIRA tickets from override commands used for the first time within the last {max_age_days} days:\n\n')
 
+    count = 0
     for ticket, created_dates in collector.items():
         earliest_date = min(created_dates)
         age = NOW - earliest_date
         if age.total_seconds() < 60 * 60 * 24 * max_age_days:
-            reportfragment.write(f'- {ticket}\n')
-            #print(f'   - {ticket}')
+            count += 1
+            if count < 15:
+                reportfragment.write(f'- {ticket}\n')
+                # print(f'   - {ticket}')
+            else:
+                reportfragment.write(f'- ...\n')
+                break
 
     reportfragment.write('\n\n')
 
