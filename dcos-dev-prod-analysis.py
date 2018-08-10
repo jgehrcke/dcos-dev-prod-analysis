@@ -110,8 +110,8 @@ def analyze_pr_comments(prs):
     ).strip())
 
 
-    reportfragment = analyze_overrides('Last 5 days', 5, all_override_comments, prs)
-    override_report.write(reportfragment.getvalue())
+    #reportfragment = analyze_overrides('Last 5 days', 5, all_override_comments, prs)
+    #override_report.write(reportfragment.getvalue())
 
     reportfragment = analyze_overrides('Last 10 days', 10, all_override_comments, prs)
     override_report.write(reportfragment.getvalue())
@@ -121,7 +121,6 @@ def analyze_pr_comments(prs):
 
     reportfragment = analyze_overrides('all-time stats', 9999, all_override_comments, prs)
     override_report.write(reportfragment.getvalue())
-
 
     log.info('Rewrite JIRA ticket IDs in the Markdown report')
     report_md_text = override_report.getvalue()
@@ -135,31 +134,33 @@ def analyze_pr_comments(prs):
     with open(md_report_filepath, 'wb') as f:
         f.write(report_md_text.encode('utf-8'))
 
-    # Find first occurrence of individual override JIRA tickets, and show the
-    # ones that were used for the first time within the last N days (this
-    # identifies new flakes).
-
-    collector = defaultdict(list)
-    for comment in all_override_comments:
-        collector[comment['ticket']].append(comment['comment_obj'].created_at)
-
-    max_age_days = 10
-    print(f'\n\n\n* JIRA tickets from override commands used for the first time within the last {max_age_days} days')
-    for ticket, created_dates in collector.items():
-        earliest_date = min(created_dates)
-        age = NOW - earliest_date
-        if age.total_seconds() < 60 * 60 * 24 * max_age_days:
-            print(f'   - {ticket}')
 
 def analyze_overrides(heading, max_age_days, all_override_comments, prs):
     print(f'\n\n\n* Override comment analysis: {heading}')
     reportfragment = StringIO()
-    reportfragment.write(f'\n### {heading}\n\n')
-    reportfragment.write(
-        f'This report is based on status check override commands issued in '
-         'the last {max_age_days} days. ')
+    reportfragment.write(f'\n\n### {heading}\n\n')
+    reportfragment.write(f'This report is based on status check override commands issued in the last {max_age_days} days. ')
     analyze_overrides_last_n_days(all_override_comments, max_age_days, reportfragment)
     analyze_overrides_in_recent_prs(prs, max_age_days, reportfragment)
+
+    # Find first occurrence of individual override JIRA tickets, and show the
+    # ones that were used for the first time within the last N days (this
+    # identifies new flakes).
+    collector = defaultdict(list)
+    for comment in all_override_comments:
+        collector[comment['ticket']].append(comment['comment_obj'].created_at)
+    max_age_days = 10
+    reportfragment.write(f'JIRA tickets from override commands used for the first time within the last {max_age_days} days:\n\n')
+
+    for ticket, created_dates in collector.items():
+        earliest_date = min(created_dates)
+        age = NOW - earliest_date
+        if age.total_seconds() < 60 * 60 * 24 * max_age_days:
+            reportfragment.write(f'- {ticket}\n')
+            #print(f'   - {ticket}')
+
+    reportfragment.write('\n\n')
+
     return reportfragment
 
 
@@ -208,11 +209,7 @@ def build_histograms_from_ocs(override_comments, reportfragment):
         c for c in override_comments if len(c['checkname'].split()) > 1]
     nbr_invalid = len(comments_with_whitespace_in_checkname)
     print(f'   Comments with invalid checkname (whitespace): {nbr_invalid}')
-    reportfragment.write(
-        f'Number of override commands issued with invalid status key '
-         '(check name): **{nbr_invalid}**.'
-    )
-
+    reportfragment.write(f'Number of override commands issued with invalid status key (check name): **{nbr_invalid}**.\n\n')
     topn = 10
 
     print(f'   Top {topn} JIRA tickets used in override comments')
