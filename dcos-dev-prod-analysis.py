@@ -53,7 +53,9 @@ def main():
     ]
     analyze_pr_comments(prs_for_comment_analysis)
 
-    # analyze_merged_prs(allprs)
+    prs_for_throughput_analysis = prs_for_comment_analysis
+
+    # analyze_merged_prs(prs_for_throughput_analysis)
 
 
 def analyze_pr_comments(prs):
@@ -437,12 +439,18 @@ def analyze_merged_prs(prs):
     filtered_prs = [pr for pr in filtered_prs if 'mergebot' not in pr.user.login]
     log.info('Number of filtered pull requests: %s', len(filtered_prs))
 
-    log.info('Filter pull requests not having `Train` in title.')
+    log.info('Filter pull requests not having `Train` or `train` in title.')
     filtered_prs = [pr for pr in filtered_prs if 'train' not in pr.title.lower()]
     log.info('Number of filtered pull requests: %s', len(filtered_prs))
 
-    # Proceed with analyzing only those pull requests that were not created
-    # by mergebot.
+    # Proceed with analyzing only those pull requests that were not created by
+    # mergebot. Note that this ignores an important class of pull request, I
+    # think, all downstream PRs created via the bump-ee command. This is a
+    # severe limtiation, improve this filter. Major goal is to look at train
+    # PRs separately, and to filter PRs by certain criteria in general, such as
+    # - how many lines do they change
+    # - are these just simple package bumps?
+    # - ...
 
     log.info('Build main Dataframe')
 
@@ -492,7 +500,7 @@ def plot_quality(df):
     df['quality'].plot()
     plt.xlabel('Time')
     plt.ylabel('Throughput [1/day] / latency [day]')
-    set_title('PR integration quality for PRs in mesosphere/dcos-enterprise')
+    set_title('PR integration quality for PRs in both DC/OS repos')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #     matcher.subtitle
     # set_subtitle('Raw data')
@@ -526,8 +534,8 @@ def plot_throughput(filtered_prs):
         markersize=5,
     )
     plt.xlabel('Time')
-    plt.ylabel('Throughput [1/day]')
-    set_title('Pull request throughput for PRs in mesosphere/dcos-enterprise')
+    plt.ylabel('Throughput [1/day], rolling window of 3 weeks width')
+    set_title('Pull request throughput for PRs in both DC/OS repos')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #     matcher.subtitle
     # set_subtitle('Raw data')
@@ -547,7 +555,7 @@ def plot_latency(df):
         markeredgecolor='gray'
     )
     plt.xlabel('Pull request creation time')
-    plt.ylabel('Time-to-merge latency [day]')
+    plt.ylabel('Time-to-merge latency [day], rolling window of 3 weeks width')
     set_title('Time-to-merge for PRs in mesosphere/dcos-enterprise')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #    matcher.subtitle
