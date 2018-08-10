@@ -29,7 +29,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 
-NOW = datetime.now()
+NOW = datetime.utcnow()
 log = logging.getLogger()
 logging.basicConfig(
     level=logging.INFO,
@@ -93,21 +93,47 @@ def analyze_pr_comments(prs):
     # extracted from a more narrow time window from the recent past are probably
     # more relevant in practice.
 
-    print('\n\n\n* Override comment analysis (all-time stats)')
-    analyze_overrides_last_n_days(all_override_comments, 9999)
-    analyze_overrides_in_recent_prs(prs, 9999)
+    now_text = NOW.strftime('%Y-%m-%d %H:%M UTC')
+    override_report = StringIO()
+    override_report.write(textwrap.dedent(
+    f"""
+    % DC/OS developer productivity report
+    %
+    % Generated on {now_text}
 
-    print('\n\n\n* Override comment analysis (last 30 days)')
-    analyze_overrides_last_n_days(all_override_comments, 30)
-    analyze_overrides_in_recent_prs(prs, 30)
+    The report is generated based on GitHub pull request data from both, the
+    `mesosphere/dcos-enterprise` and the `dcos/dcos` repository.
 
-    print('\n\n\n* Override comment analysis (last 10 days)')
-    analyze_overrides_last_n_days(all_override_comments, 10)
-    analyze_overrides_in_recent_prs(prs, 10)
+    ## Status check override report (CI instability)
 
-    print('\n\n\n* Override comment analysis (last 5 days)')
-    analyze_overrides_last_n_days(all_override_comments, 5)
-    analyze_overrides_in_recent_prs(prs, 5)
+    """
+    ).strip())
+
+
+    reportfragment = analyze_overrides('Last 5 days', 5, all_override_comments, prs)
+    override_report.write(reportfragment.getvalue())
+
+    reportfragment = analyze_overrides('Last 10 days', 10, all_override_comments, prs)
+    override_report.write(reportfragment.getvalue())
+
+    reportfragment = analyze_overrides('Last 30 days', 30, all_override_comments, prs)
+    override_report.write(reportfragment.getvalue())
+
+    reportfragment = analyze_overrides('all-time stats', 9999, all_override_comments, prs)
+    override_report.write(reportfragment.getvalue())
+
+
+    log.info('Rewrite JIRA ticket IDs in the Markdown report')
+    report_md_text = override_report.getvalue()
+    re.sub(
+        "[A-Z_]+-[0-9]+", "[\g<0>](https://jira.mesosphere.com/\g<0>)",
+        report_md_text
+    )
+
+    md_report_filepath = 'dcos-dev-prod-report.md'
+    log.info('Write generated Markdown report to: %s', md_report_filepath)
+    with open(md_report_filepath, 'wb') as f:
+        f.write(report_md_text.encode('utf-8'))
 
     # Find first occurrence of individual override JIRA tickets, and show the
     # ones that were used for the first time within the last N days (this
@@ -125,8 +151,19 @@ def analyze_pr_comments(prs):
         if age.total_seconds() < 60 * 60 * 24 * max_age_days:
             print(f'   - {ticket}')
 
+def analyze_overrides(heading, max_age_days, all_override_comments, prs):
+    print(f'\n\n\n* Override comment analysis: {heading}')
+    reportfragment = StringIO()
+    reportfragment.write(f'\n### {heading}\n\n')
+    reportfragment.write(
+        f'This report is based on status check override commands issued in '
+         'the last {max_age_days} days. ')
+    analyze_overrides_last_n_days(all_override_comments, max_age_days, reportfragment)
+    analyze_overrides_in_recent_prs(prs, max_age_days, reportfragment)
+    return reportfragment
 
-def analyze_overrides_in_recent_prs(prs, max_age_days):
+
+def analyze_overrides_in_recent_prs(prs, max_age_days, reportfragment):
     """
     Find pull requests not older than `max_age_days` and extract all override
     commands issued in them. Perform a statistical analysis on this set of
@@ -138,20 +175,22 @@ def analyze_overrides_in_recent_prs(prs, max_age_days):
         age = NOW - pr.created_at
         if age.total_seconds() < 60 * 60 * 24 * max_age_days:
             prs_to_analyze.append(pr)
-    analyze_overrides_in_prs(prs_to_analyze)
+    analyze_overrides_in_prs(prs_to_analyze, reportfragment)
 
 
-def analyze_overrides_in_prs(prs):
+def analyze_overrides_in_prs(prs, reportfragment):
     topn = 10
     print(f'   Top {topn} number of override commands issued per pull request:')
     counter = Counter([len(pr._override_comments) for pr in prs])
-    print_table(
+    tabletext = get_mdtable(
         ['Number of PRs', 'Number of overrides'],
         [[count, item] for item, count in counter.most_common(topn)]
     )
+    print(tabletext)
+    # Do not, for now, include this in the markdown report.
 
 
-def analyze_overrides_last_n_days(override_comments, n):
+def analyze_overrides_last_n_days(override_comments, n, reportfragment):
     print(f'** Histograms from override comments younger than {n} days')
     max_age_days = n
     ocs_to_analyze = []
@@ -160,35 +199,49 @@ def analyze_overrides_last_n_days(override_comments, n):
         if age.total_seconds() < 60 * 60 * 24 * max_age_days:
             ocs_to_analyze.append(oc)
     print(f'** Number of override comments: {len(ocs_to_analyze)}')
-    build_histograms_from_ocs(ocs_to_analyze)
+    reportfragment.write(f'Number of override commands issued: **{len(ocs_to_analyze)}**. ')
+    build_histograms_from_ocs(ocs_to_analyze, reportfragment)
 
 
-def build_histograms_from_ocs(override_comments):
+def build_histograms_from_ocs(override_comments, reportfragment):
     comments_with_whitespace_in_checkname = [
         c for c in override_comments if len(c['checkname'].split()) > 1]
     nbr_invalid = len(comments_with_whitespace_in_checkname)
     print(f'   Comments with invalid checkname (whitespace): {nbr_invalid}')
+    reportfragment.write(
+        f'Number of override commands issued with invalid status key '
+         '(check name): **{nbr_invalid}**.'
+    )
 
     topn = 10
 
     print(f'   Top {topn} JIRA tickets used in override comments')
+    reportfragment.write(f'\n**Top {topn} JIRA tickets:**\n\n')
+
     counter = Counter([oc['ticket'] for oc in override_comments])
-    print_table(
+    tabletext = get_mdtable(
         ['JIRA ticket', 'Number of overrides'],
-        [[item, count] for item, count in counter.most_common(topn)]
+        [[item, count] for item, count in counter.most_common(topn)],
     )
+    reportfragment.write(tabletext)
 
     print(f'   Top {topn} CI check names used in override comments')
+    reportfragment.write(f'\n**Top {topn} status keys (check names):**\n\n')
+
     counter = Counter([oc['checkname'] for oc in override_comments])
-    print_table(
+    tabletext = get_mdtable(
         ['Status check', 'Number of overrides'],
-        [[item, count] for item, count in counter.most_common(topn)]
+        [[item, count] for item, count in counter.most_common(topn)],
     )
+    reportfragment.write(tabletext)
+    reportfragment.write('\n\n')
 
 
-def print_table(header_list, value_matrix):
-    if not value_matrix:
-        return
+def get_mdtable(header_list, value_matrix):
+    """
+    Generate table text in Markdown.
+    """
+    assert value_matrix
 
     tw = pytablewriter.MarkdownTableWriter()
     tw.stream = StringIO()
@@ -199,7 +252,8 @@ def print_table(header_list, value_matrix):
     # see https://github.com/thombashi/pytablewriter/issues/2
     tw.margin = 1
     tw.write_table()
-    print(textwrap.indent(tw.stream.getvalue(), '    '))
+    # print(textwrap.indent(tw.stream.getvalue(), '    '))
+    return tw.stream.getvalue()
 
 
 def identify_override_comments(prs):
