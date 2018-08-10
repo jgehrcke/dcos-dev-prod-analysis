@@ -17,10 +17,13 @@ import logging
 import itertools
 import re
 import pickle
+import textwrap
 
+from io import StringIO
 from collections import Counter, defaultdict
 from datetime import datetime
 
+import pytablewriter
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
@@ -142,8 +145,10 @@ def analyze_overrides_in_prs(prs):
     topn = 10
     print(f'   Top {topn} number of override commands issued per pull request:')
     counter = Counter([len(pr._override_comments) for pr in prs])
-    for item, count in counter.most_common(topn):
-        print('{:>8} PR(s) have {:>3} override comment(s)'.format(count, item))
+    print_table(
+        ['Number of PRs', 'Number of overrides'],
+        [[count, item] for item, count in counter.most_common(topn)]
+    )
 
 
 def analyze_overrides_last_n_days(override_comments, n):
@@ -165,15 +170,36 @@ def build_histograms_from_ocs(override_comments):
     print(f'   Comments with invalid checkname (whitespace): {nbr_invalid}')
 
     topn = 10
+
     print(f'   Top {topn} JIRA tickets used in override comments')
     counter = Counter([oc['ticket'] for oc in override_comments])
-    for item, count in counter.most_common(topn):
-        print('{:>8} overrides refer to JIRA ticket {:>3}'.format(count, item))
+    print_table(
+        ['JIRA ticket', 'Number of overrides'],
+        [[item, count] for item, count in counter.most_common(topn)]
+    )
 
     print(f'   Top {topn} CI check names used in override comments')
     counter = Counter([oc['checkname'] for oc in override_comments])
-    for item, count in counter.most_common(topn):
-        print('{:>8} overrides refer to CI check {}'.format(count, item))
+    print_table(
+        ['Status check', 'Number of overrides'],
+        [[item, count] for item, count in counter.most_common(topn)]
+    )
+
+
+def print_table(header_list, value_matrix):
+    if not value_matrix:
+        return
+
+    tw = pytablewriter.MarkdownTableWriter()
+    tw.stream = StringIO()
+    tw.header_list = header_list
+    tw.value_matrix = value_matrix
+    # Potentially use
+    # writer.align_list = [Align.LEFT, Align.RIGHT, ...]
+    # see https://github.com/thombashi/pytablewriter/issues/2
+    tw.margin = 1
+    tw.write_table()
+    print(textwrap.indent(tw.stream.getvalue(), '    '))
 
 
 def identify_override_comments(prs):
