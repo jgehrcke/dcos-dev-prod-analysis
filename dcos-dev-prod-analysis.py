@@ -15,6 +15,7 @@
 
 import logging
 import itertools
+import os
 import re
 import pickle
 import textwrap
@@ -51,11 +52,14 @@ def main():
         pr for pr in
         itertools.chain(prs_downstream.values(), prs_upstream.values())
     ]
+
+    matplotlib_config()
+
     analyze_pr_comments(prs_for_comment_analysis)
 
     prs_for_throughput_analysis = prs_for_comment_analysis
 
-    # analyze_merged_prs(prs_for_throughput_analysis)
+    analyze_merged_prs(prs_for_throughput_analysis)
 
 
 def analyze_pr_comments(prs):
@@ -120,13 +124,17 @@ def analyze_pr_comments(prs):
     reportfragment = analyze_overrides('Last 30 days', 30, all_override_comments, prs)
     override_report.write(reportfragment.getvalue())
 
-    reportfragment = analyze_overrides('all-time stats', 9999, all_override_comments, prs)
+    reportfragment = analyze_overrides('All-time stats', 9999, all_override_comments, prs)
     override_report.write(reportfragment.getvalue())
+
+    figure_file_abspath = plot_override_comment_rate(all_override_comments)
+
+    override_report.write(f'[![Override comment rate plotted over time]({figure_file_abspath} "Override comment rate plotted over time")](file://{figure_file_abspath})')
 
     log.info('Rewrite JIRA ticket IDs in the Markdown report')
     report_md_text = override_report.getvalue()
     report_md_text = re.sub(
-        "[A-Z_]+-[0-9]+", "[\g<0>](https://jira.mesosphere.com/\g<0>)",
+        "[A-Z_]+-[0-9]+", "[\g<0>](https://jira.mesosphere.com/browse/\g<0>)",
         report_md_text
     )
 
@@ -437,6 +445,60 @@ def detect_override_comment(comment, pr):
     return None
 
 
+def plot_override_comment_rate(override_comments):
+
+    # Rolling window of one week width. The column does not matter, only
+    # evaluate number of events (rows) in the rolling window, and count them,
+    # then normalize.
+
+    df = pd.DataFrame(
+        {'foo': [1 for c in override_comments]},
+        index=[pd.Timestamp(c['comment_obj'].created_at) for c in override_comments]
+    )
+
+    # Sort by time (comment creation time).
+    df.sort_index(inplace=True)
+
+    rollingwindow = df['foo'].rolling('7d')
+
+    # Note(JP): this is not yet built for a period of time w/o override
+    # commands, `min_periods` is 1 by default for a rolling window whose width
+    # is specified as a time delta. See
+    # https://pandas.pydata.org/pandas-docs/stable/generated/pandas.DataFrame.rolling.html
+    commentrate = rollingwindow.count() / 7.0
+
+    commentrate.plot(
+        linestyle='None',
+        color='gray',
+        marker='.',
+        markersize=3,
+        markeredgecolor='gray'
+    )
+    plt.xlabel('Time (UTC)')
+    plt.ylabel('Override command rate [1/day]')
+    set_title('Override command rate (from both DC/OS repositories)')
+    set_subtitle('Arithmetic mean over rolling window of 1 week width')
+    plt.tight_layout(rect=(0, 0, 1, 0.95))
+    return savefig('Override command rate')
+
+
+def savefig(title):
+    """
+    Expected to return an absolute path.
+    """
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    # Lowercase, replace special chars with whitespace, join on whitespace.
+    cleantitle = '-'.join(re.sub('[^a-z0-9]+', ' ', title.lower()).split())
+
+    fname = today + '_' + cleantitle
+
+    fpath_figure = fname + '.png'
+    log.info('Writing PNG figure to %s', fpath_figure)
+    plt.savefig(fpath_figure, dpi=150)
+    return os.path.abspath(fpath_figure)
+
+
 def analyze_merged_prs(prs):
 
     log.info('Filter merged pull requests.')
@@ -460,6 +522,10 @@ def analyze_merged_prs(prs):
     # - are these just simple package bumps?
     # - ...
 
+    # This line assumes that somewhere in the code path a figure has been
+    # created before, now create a fresh one.
+    plt.figure()
+
     log.info('Build main Dataframe')
 
     # I think the point in time when a pull request has been merged is the
@@ -481,8 +547,6 @@ def analyze_merged_prs(prs):
     df.sort_index(inplace=True)
 
     df['opendays'] = df['openseconds'] / 86400
-
-    matplotlib_config()
 
     latency = plot_latency(df)
 
@@ -541,7 +605,7 @@ def plot_throughput(filtered_prs):
         color='black',
         markersize=5,
     )
-    plt.xlabel('Time')
+    plt.xlabel('Time (UTC)')
     plt.ylabel('Throughput [1/day], rolling window of 3 weeks width')
     set_title('Pull request throughput for PRs in both DC/OS repos')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
