@@ -180,16 +180,16 @@ def analyze_overrides_in_recent_prs(prs, max_age_days, reportfragment):
     print(f'** Histograms from override comments in PRs younger than {max_age_days} days')
     prs_to_analyze = []
     for pr in prs:
+        # `pr.created_at` sadly is a native datetime object. It is known to
+        # represent the time in UTC, however. `NOW` also is a datetime object
+        # explicitly in UTC.
         age = NOW - pr.created_at
         if age.total_seconds() < 60 * 60 * 24 * max_age_days:
             prs_to_analyze.append(pr)
-    analyze_overrides_in_prs(prs_to_analyze, reportfragment)
 
-
-def analyze_overrides_in_prs(prs, reportfragment):
     topn = 10
     print(f'   Top {topn} number of override commands issued per pull request:')
-    counter = Counter([len(pr._override_comments) for pr in prs])
+    counter = Counter([len(pr._override_comments) for pr in prs_to_analyze])
     tabletext = get_mdtable(
         ['Number of PRs', 'Number of overrides'],
         [[count, item] for item, count in counter.most_common(topn)]
