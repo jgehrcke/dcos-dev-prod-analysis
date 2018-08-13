@@ -111,7 +111,6 @@ def analyze_pr_comments(prs):
     """
     ).strip())
 
-
     #reportfragment = analyze_overrides('Last 5 days', 5, all_override_comments, prs)
     #override_report.write(reportfragment.getvalue())
 
@@ -161,8 +160,9 @@ def analyze_overrides(heading, max_age_days, all_override_comments, prs):
             count += 1
             if count < 15:
                 reportfragment.write(f'- {ticket}\n')
-                # print(f'   - {ticket}')
             else:
+                # For long time frames (such as for all-time stats) this list
+                # grows too big to be meaningful.
                 reportfragment.write(f'- ...\n')
                 break
 
@@ -208,6 +208,14 @@ def analyze_overrides_last_n_days(override_comments, n, reportfragment):
             ocs_to_analyze.append(oc)
     print(f'** Number of override comments: {len(ocs_to_analyze)}')
     reportfragment.write(f'Number of override commands issued: **{len(ocs_to_analyze)}**. ')
+    oldest_created_at = min(c['comment_obj'].created_at for c in ocs_to_analyze)
+    # `oldest_created_at` is a naive timezone object representing the time
+    # of the comment creation in UTC. GitHub returns tz information, but PyGitHub
+    # does not parse it properly. See
+    # https://github.com/PyGithub/PyGithub/blob/365a0a24d3d2f06eeb4c93b4487fcfb88ae95dd0/github/GithubObject.py#L168
+    # and https://github.com/PyGithub/PyGithub/issues/512 and
+    # https://stackoverflow.com/a/30696682/145400.
+    reportfragment.write(f'Oldest override comment created at {oldest_created_at} (UTC). ')
     build_histograms_from_ocs(ocs_to_analyze, reportfragment)
 
 
@@ -216,7 +224,7 @@ def build_histograms_from_ocs(override_comments, reportfragment):
         c for c in override_comments if len(c['checkname'].split()) > 1]
     nbr_invalid = len(comments_with_whitespace_in_checkname)
     print(f'   Comments with invalid checkname (whitespace): {nbr_invalid}')
-    reportfragment.write(f'Number of override commands issued with invalid status key (check name): **{nbr_invalid}**.\n\n')
+    reportfragment.write(f'Number of override commands issued with invalid status key: **{nbr_invalid}**.\n\n')
     topn = 10
 
     print(f'   Top {topn} JIRA tickets used in override comments')
@@ -283,7 +291,7 @@ def identify_override_comments(prs):
     # Create a data structure `all_pr_comments` that is meant to contain all
     # issue comments from all pull requests, in a single list. "Issue comments"
     # on pull request issues do not contain review comments, but just normal
-    # comments emitted straight in the main commentary thread.
+    # comments emitted straight in the main commentary thre analyze_pr_comments(pad.
     all_pr_comments = []
     for pr in prs:
         all_pr_comments.extend(pr._issue_comments)
