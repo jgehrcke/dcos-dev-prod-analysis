@@ -28,9 +28,9 @@ $if(highlighting-css)$
 $highlighting-css$
   </style>
 $endif$
-$for(css)$
-  <link rel="stylesheet" href="$css$" />
-$endfor$
+
+<!-- https://github.com/sindresorhus/github-markdown-css -->
+<link rel="stylesheet" href="resources/github-markdown.css">
 $if(math)$
   $math$
 $endif$
@@ -44,8 +44,19 @@ $endfor$
 <link rel="stylesheet" href="resources/magnific-popup.css">
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
 <script src="resources/jquery.magnific-popup.min.js"></script>
+<!-- What follows is GitHub-inspired body layout -->
+<style>
+      body {
+        box-sizing: border-box;
+        min-width: 200px;
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 45px;
+      }
+    </style>
 </head>
 <body>
+<article class="markdown-body">
 $for(include-before)$
 $include-before$
 $endfor$
@@ -73,6 +84,7 @@ $body$
 $for(include-after)$
 $include-after$
 $endfor$
+</article>
 <script>
 jQuery(document).ready(function($$) {
     $$('a[href*=".jpg"], a[href*=".jpeg"], a[href*=".png"], a[href*=".gif"]').each(function(){
