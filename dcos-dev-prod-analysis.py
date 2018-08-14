@@ -55,14 +55,41 @@ def main():
 
     matplotlib_config()
 
-    analyze_pr_comments(prs_for_comment_analysis)
+    now_text = NOW.strftime('%Y-%m-%d %H:%M UTC')
+    markdownreport = StringIO()
+    markdownreport.write(textwrap.dedent(
+    f"""
+    % DC/OS developer productivity report
+    %
+    % Generated on {now_text}
+
+    The report is generated based on GitHub pull request data from both, the
+    `mesosphere/dcos-enterprise` and the `dcos/dcos` repository. The code for
+    generating this report lives in
+    [`jgehrcke/dcos-dev-prod-analysis`](https://github.com/jgehrcke/dcos-dev-prod-analysis).
+    """
+    ).strip())
+
+    analyze_pr_comments(prs_for_comment_analysis, markdownreport)
 
     prs_for_throughput_analysis = prs_for_comment_analysis
 
-    analyze_merged_prs(prs_for_throughput_analysis)
+    analyze_merged_prs(prs_for_throughput_analysis, markdownreport)
+
+    log.info('Rewrite JIRA ticket IDs in the Markdown report')
+    report_md_text = markdownreport.getvalue()
+    report_md_text = re.sub(
+        "[A-Z_]+-[0-9]+", "[\g<0>](https://jira.mesosphere.com/browse/\g<0>)",
+        report_md_text
+    )
+
+    md_report_filepath = 'dcos-dev-prod-report.md'
+    log.info('Write generated Markdown report to: %s', md_report_filepath)
+    with open(md_report_filepath, 'wb') as f:
+        f.write(report_md_text.encode('utf-8'))
 
 
-def analyze_pr_comments(prs):
+def analyze_pr_comments(prs, override_report):
     """
     Analyze the issue comments in all pull request objects in `prs`.
 
@@ -99,18 +126,9 @@ def analyze_pr_comments(prs):
     # extracted from a more narrow time window from the recent past are probably
     # more relevant in practice.
 
-    now_text = NOW.strftime('%Y-%m-%d %H:%M UTC')
-    override_report = StringIO()
-    override_report.write(textwrap.dedent(
-    f"""
-    % DC/OS developer productivity report
-    %
-    % Generated on {now_text}
 
-    The report is generated based on GitHub pull request data from both, the
-    `mesosphere/dcos-enterprise` and the `dcos/dcos` repository. The code for
-    generating this report lives in
-    [`jgehrcke/dcos-dev-prod-analysis`](https://github.com/jgehrcke/dcos-dev-prod-analysis).
+    override_report.write(textwrap.dedent(
+    """
 
     ## Status check override report (CI instability)
 
@@ -130,17 +148,6 @@ def analyze_pr_comments(prs):
     reportfragment = analyze_overrides('Last 30 days', 30, all_override_comments, prs)
     override_report.write(reportfragment.getvalue())
 
-    log.info('Rewrite JIRA ticket IDs in the Markdown report')
-    report_md_text = override_report.getvalue()
-    report_md_text = re.sub(
-        "[A-Z_]+-[0-9]+", "[\g<0>](https://jira.mesosphere.com/browse/\g<0>)",
-        report_md_text
-    )
-
-    md_report_filepath = 'dcos-dev-prod-report.md'
-    log.info('Write generated Markdown report to: %s', md_report_filepath)
-    with open(md_report_filepath, 'wb') as f:
-        f.write(report_md_text.encode('utf-8'))
 
 
 def analyze_overrides(heading, max_age_days, all_override_comments, prs):
@@ -578,7 +585,7 @@ def savefig(title):
     return os.path.abspath(fpath_figure)
 
 
-def analyze_merged_prs(prs):
+def analyze_merged_prs(prs, report):
 
     log.info('Filter merged pull requests.')
     filtered_prs = [pr for pr in prs if pr.merged_at is not None]
@@ -627,20 +634,28 @@ def analyze_merged_prs(prs):
 
     df['opendays'] = df['openseconds'] / 86400
 
-    latency = plot_latency(df)
+    latency, filepath = plot_latency(df)
 
     plt.figure()
 
-    throughput = plot_throughput(filtered_prs)
+    throughput, filepath = plot_throughput(filtered_prs)
 
     plt.figure()
 
     quality = throughput / latency
     df['quality'] = quality
 
-    plot_quality(df)
+    filepath = plot_quality(df)
 
-    plt.show()
+    #plt.show()
+
+    report.write(textwrap.dedent(
+    """
+
+    ## Pull request integration velocity report
+
+    """
+    ).strip())
 
 
 # What is good is low time to merge, and many pull requests merged per time.
@@ -656,6 +671,7 @@ def plot_quality(df):
     #     matcher.subtitle
     # set_subtitle('Raw data')
     plt.tight_layout(rect=(0, 0, 1, 0.95))
+    return savefig('Pull request integration velocity')
 
 
 def plot_throughput(filtered_prs):
@@ -692,7 +708,7 @@ def plot_throughput(filtered_prs):
     # set_subtitle('Raw data')
     plt.tight_layout(rect=(0, 0, 1, 0.95))
 
-    return throughput
+    return throughput, savefig('Pull request integration throughput')
 
 
 def plot_latency(df):
@@ -737,7 +753,7 @@ def plot_latency(df):
 
     # mean.plot()
 
-    return mean
+    return mean, savefig('Pull request intgration latency')
 
 
 def set_title(text):
