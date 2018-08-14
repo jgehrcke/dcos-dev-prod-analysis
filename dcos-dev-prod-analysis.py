@@ -459,29 +459,45 @@ def plot_override_comment_rate(override_comments):
     # Sort by time (comment creation time).
     df.sort_index(inplace=True)
 
-    rollingwindow = df['foo'].rolling('7d', min_periods=0)
+    # Resample so that there is one data point per day (this downsamples most of
+    # the time, and upsamples during other times, such as holidays). Count
+    # number of values within each bucket (the number of override commands per
+    # day). For those days where there is no data point at all `count()` results
+    # in a value of 0.
+    df = df.resample('1D').count()
 
-    # Todo(JP): make it so that the value is 0 for time periods when there
-    # were no comments issued for a time frame longer than the window width.
-    # (right now this does not upsample!)
+    # Example for how the dataframe can look like here:
+    #
+    # After resample().count() on df:
+    #             foo
+    # 2017-12-17    3
+    # 2017-12-18    6
+    # 2017-12-19   26
+    # 2017-12-20   15
+    # 2017-12-21   10
+    # 2017-12-22    4
+    # 2017-12-23    0
+    # 2017-12-24    0
+    # 2017-12-25    0
+    # 2017-12-26    2
+    # 2017-12-27    0
+    # 2017-12-28    4
+    # 2017-12-29    0
+    # 2017-12-30    0
 
-    # Note(JP): this is not yet built for a period of time w/o override
-    # commands, `min_periods` is 1 by default for a rolling window whose width
-    # is specified as a time delta. See
-    # https://pandas.pydata.org/pandas-docs/stable/generated/pandas.DataFrame.rolling.html
-    commentrate = rollingwindow.count() / 7.0
-
+    # Apply rolling time window analysis, and `sum()` the values within a window
+    # because as of here the value per data points represents the number of
+    # override commands issued per day.
+    rollingwindow = df['foo'].rolling('3d', min_periods=0)
+    commentrate = rollingwindow.sum() / 3.0
     commentrate.plot(
-        linestyle='None',
-        color='gray',
-        marker='.',
-        markersize=3,
-        markeredgecolor='gray'
+        linestyle='solid',
+        color='black',
     )
     plt.xlabel('Time (UTC)')
     plt.ylabel('Override command rate [1/day]')
     set_title('Override command rate (from both DC/OS repositories)')
-    set_subtitle('Arithmetic mean over rolling window of 1 week width')
+    set_subtitle('Arithmetic mean over rolling window of 3 days width')
     plt.tight_layout(rect=(0, 0, 1, 0.95))
     return savefig('Override command rate')
 
