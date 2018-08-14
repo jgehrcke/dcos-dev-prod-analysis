@@ -508,6 +508,17 @@ def plot_override_comment_rate(override_comments):
     offset = pd.DateOffset(seconds=window_width_days_1*24*60*60 / 2.0)
     commentrate_1.index = commentrate_1.index - offset
 
+    # In the resulting time series, all leftmost values up to the rolling window
+    # width are dominated by the effect that the rolling window (incoming from
+    # the left) does not yet completely overlap with the data. That is, here the
+    # rolling window result is (linearly increasing) systematically to small.
+    # Because by now the time series has one sample per day, the number of
+    # leftmost samples with a bad result corresponds to the window width in
+    # days. Return just the slice `[window_width_days:]`. The same consideration
+    # does not hold true for the right end of the data: the window is rolled not
+    # further than the right end of the data.
+    commentrate_1 = commentrate_1[window_width_days_1:]
+
     # Same thing for a more wide rolling window.
     window_width_days_2 = 14
     rollingwindow_2 = df['foo'].rolling(
@@ -518,6 +529,7 @@ def plot_override_comment_rate(override_comments):
 
     offset = pd.DateOffset(seconds=window_width_days_2*24*60*60 / 2.0)
     commentrate_2.index = commentrate_2.index - offset
+    commentrate_2 = commentrate_2[window_width_days_2:]
 
     ax = commentrate_1.plot(
         linestyle='dashdot',
