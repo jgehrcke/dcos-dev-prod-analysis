@@ -459,7 +459,11 @@ def plot_override_comment_rate(override_comments):
     # Sort by time (comment creation time).
     df.sort_index(inplace=True)
 
-    rollingwindow = df['foo'].rolling('7d')
+    rollingwindow = df['foo'].rolling('7d', min_periods=0)
+
+    # Todo(JP): make it so that the value is 0 for time periods when there
+    # were no comments issued for a time frame longer than the window width.
+    # (right now this does not upsample!)
 
     # Note(JP): this is not yet built for a period of time w/o override
     # commands, `min_periods` is 1 by default for a rolling window whose width
