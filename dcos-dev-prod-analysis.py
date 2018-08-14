@@ -115,21 +115,18 @@ def analyze_pr_comments(prs):
     """
     ).strip())
 
-    #reportfragment = analyze_overrides('Last 5 days', 5, all_override_comments, prs)
-    #override_report.write(reportfragment.getvalue())
+    reportfragment = analyze_overrides('All-time stats', 10**4, all_override_comments, prs)
+    override_report.write(reportfragment.getvalue())
+
+    # Include figure in report: override command rate over time.
+    figure_file_abspath = plot_override_comment_rate(all_override_comments)
+    override_report.write(f'[![Override comment rate plotted over time]({figure_file_abspath} "Override comment rate plotted over time")](file://{figure_file_abspath})')
 
     reportfragment = analyze_overrides('Last 10 days', 10, all_override_comments, prs)
     override_report.write(reportfragment.getvalue())
 
     reportfragment = analyze_overrides('Last 30 days', 30, all_override_comments, prs)
     override_report.write(reportfragment.getvalue())
-
-    reportfragment = analyze_overrides('All-time stats', 9999, all_override_comments, prs)
-    override_report.write(reportfragment.getvalue())
-
-    figure_file_abspath = plot_override_comment_rate(all_override_comments)
-
-    override_report.write(f'[![Override comment rate plotted over time]({figure_file_abspath} "Override comment rate plotted over time")](file://{figure_file_abspath})')
 
     log.info('Rewrite JIRA ticket IDs in the Markdown report')
     report_md_text = override_report.getvalue()
