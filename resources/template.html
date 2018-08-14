@@ -40,6 +40,10 @@ $endif$
 $for(header-includes)$
   $header-includes$
 $endfor$
+<!-- Note(JP): Quick way of including Magnific Popup so that images in the document open in a lightbox. -->
+<link rel="stylesheet" href="resources/magnific-popup.css">
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+<script src="resources/jquery.magnific-popup.min.js"></script>
 </head>
 <body>
 $for(include-before)$
@@ -69,5 +73,24 @@ $body$
 $for(include-after)$
 $include-after$
 $endfor$
+<script>
+jQuery(document).ready(function($) {
+    $('a[href*=".jpg"], a[href*=".jpeg"], a[href*=".png"], a[href*=".gif"]').each(function(){
+        if ($(this).parents('.gallery').length == 0) {
+            $(this).magnificPopup({
+                type:'image',
+                closeOnContentClick: true,
+                });
+            }
+        });
+    $('.gallery').each(function() {
+        $(this).magnificPopup({
+            delegate: 'a',
+            type: 'image',
+            gallery: {enabled: true}
+            });
+        });
+    });
+</script>
 </body>
 </html>
