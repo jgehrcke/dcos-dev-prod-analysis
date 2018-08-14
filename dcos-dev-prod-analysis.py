@@ -108,7 +108,9 @@ def analyze_pr_comments(prs):
     % Generated on {now_text}
 
     The report is generated based on GitHub pull request data from both, the
-    `mesosphere/dcos-enterprise` and the `dcos/dcos` repository.
+    `mesosphere/dcos-enterprise` and the `dcos/dcos` repository. The code for
+    generating this report lives in
+    [`jgehrcke/dcos-dev-prod-analysis`](https://github.com/jgehrcke/dcos-dev-prod-analysis).
 
     ## Status check override report (CI instability)
 
@@ -145,7 +147,7 @@ def analyze_overrides(heading, max_age_days, all_override_comments, prs):
     print(f'\n\n\n* Override comment analysis: {heading}')
     reportfragment = StringIO()
     reportfragment.write(f'\n\n### {heading}\n\n')
-    reportfragment.write(f'This report is based on status check override commands issued in the last {max_age_days} days. ')
+    reportfragment.write(f'Based on override commands issued in the last {max_age_days} days. ')
     analyze_overrides_last_n_days(all_override_comments, max_age_days, reportfragment)
     analyze_overrides_in_recent_prs(prs, max_age_days, reportfragment)
 
@@ -220,7 +222,7 @@ def analyze_overrides_last_n_days(override_comments, n, reportfragment):
     # https://github.com/PyGithub/PyGithub/blob/365a0a24d3d2f06eeb4c93b4487fcfb88ae95dd0/github/GithubObject.py#L168
     # and https://github.com/PyGithub/PyGithub/issues/512 and
     # https://stackoverflow.com/a/30696682/145400.
-    reportfragment.write(f'Oldest override comment created at {oldest_created_at} (UTC). ')
+    reportfragment.write(f'Oldest override command issued at {oldest_created_at} (UTC). ')
     build_histograms_from_ocs(ocs_to_analyze, reportfragment)
 
 
@@ -485,16 +487,64 @@ def plot_override_comment_rate(override_comments):
     # Apply rolling time window analysis, and `sum()` the values within a window
     # because as of here the value per data points represents the number of
     # override commands issued per day.
-    rollingwindow = df['foo'].rolling('3d', min_periods=0)
-    commentrate = rollingwindow.sum() / 3.0
-    commentrate.plot(
-        linestyle='solid',
-        color='black',
+    window_width_days_1 = 3
+    rollingwindow_1 = df['foo'].rolling(
+        window='%sD' % window_width_days_1,
+        min_periods=0
+    )
+    commentrate_1 = rollingwindow_1.sum() / float(window_width_days_1)
+
+    # In the resulting Series object, the request rate value is assigned to the
+    # right window boundary index value (i.e. to the newest timestamp in the
+    # window). For presentation it is more convenient to have it assigned
+    # (approximately) to the temporal center of the time window. That makes
+    # sense for intuitive data interpretation of a single rolling window time
+    # series, but is essential for meaningful presentation of multiple rolling
+    # window series in the same plot (when their window width varies). Invoking
+    # `rolling(..., center=True)` however yields `NotImplementedError: center is
+    # not implemented for datetimelike and offset based windows`. As a
+    # workaround, shift the data by half the window size to 'the left': shift
+    # the timestamp index by a constant / offset.
+    offset = pd.DateOffset(seconds=window_width_days_1*24*60*60 / 2.0)
+    commentrate_1.index = commentrate_1.index - offset
+
+    # Same thing for a more wide rolling window.
+    window_width_days_2 = 14
+    rollingwindow_2 = df['foo'].rolling(
+        window='%sD' % window_width_days_2,
+        min_periods=0
+    )
+    commentrate_2 = rollingwindow_2.sum() / float(window_width_days_2)
+
+    offset = pd.DateOffset(seconds=window_width_days_2*24*60*60 / 2.0)
+    commentrate_2.index = commentrate_2.index - offset
+
+    ax = commentrate_1.plot(
+        linestyle='dashdot',
+        color='gray',
     )
     plt.xlabel('Time (UTC)')
     plt.ylabel('Override command rate [1/day]')
+
+    ax2 = commentrate_2.plot(
+        linestyle='solid',
+        marker='None',
+        color='black',
+        ax=ax
+        )
+
+    # The legend story is shitty with pandas intertwined w/ mpl.
+    # http://stackoverflow.com/a/30666612/145400
+    ax.legend([
+        f'{window_width_days_1} d window',
+        f'{window_width_days_2} d window'
+        ],
+        numpoints=4
+    )
+
     set_title('Override command rate (from both DC/OS repositories)')
-    set_subtitle('Arithmetic mean over rolling window of 3 days width')
+    set_subtitle('Arithmetic mean over rolling window')
+
     plt.tight_layout(rect=(0, 0, 1, 0.95))
     return savefig('Override command rate')
 
@@ -702,7 +752,7 @@ def set_subtitle(text):
 
 
 def matplotlib_config():
-    matplotlib.rcParams['figure.figsize'] = [10.5, 7.0]
+    matplotlib.rcParams['figure.figsize'] = [10.0, 6.5]
     matplotlib.rcParams['figure.dpi'] = 100
     matplotlib.rcParams['savefig.dpi'] = 150
     # mpl.rcParams['font.size'] = 12
