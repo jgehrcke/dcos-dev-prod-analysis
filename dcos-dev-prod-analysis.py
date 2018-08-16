@@ -67,6 +67,7 @@ def main():
     `mesosphere/dcos-enterprise` and the `dcos/dcos` repository. The code for
     generating this report lives in
     [`jgehrcke/dcos-dev-prod-analysis`](https://github.com/jgehrcke/dcos-dev-prod-analysis).
+
     """
     ).strip())
 
@@ -126,21 +127,18 @@ def analyze_pr_comments(prs, override_report):
     # extracted from a more narrow time window from the recent past are probably
     # more relevant in practice.
 
-
-    override_report.write(textwrap.dedent(
-    """
-
-    ## Status check override report (CI instability)
-
-    """
-    ).strip())
+    override_report.write('\n\n## Status check override report (CI instability)\n\n')
 
     reportfragment = analyze_overrides('All-time stats', 10**4, all_override_comments, prs)
     override_report.write(reportfragment.getvalue())
 
     # Include figure in report: override command rate over time.
     figure_file_abspath = plot_override_comment_rate(all_override_comments)
-    override_report.write(f'[![Override comment rate plotted over time]({figure_file_abspath} "Override comment rate plotted over time")](file://{figure_file_abspath})')
+    include_figure(
+        override_report,
+        figure_file_abspath,
+        'Override comment rate plotted over time'
+    )
 
     reportfragment = analyze_overrides('Last 10 days', 10, all_override_comments, prs)
     override_report.write(reportfragment.getvalue())
@@ -634,28 +632,41 @@ def analyze_merged_prs(prs, report):
 
     df['opendays'] = df['openseconds'] / 86400
 
-    latency, filepath = plot_latency(df)
+    latency, figure_latency_filepath = plot_latency(df)
 
     plt.figure()
 
-    throughput, filepath = plot_throughput(filtered_prs)
+    throughput, figure_throughput_filepath = plot_throughput(filtered_prs)
 
     plt.figure()
 
     quality = throughput / latency
     df['quality'] = quality
 
-    filepath = plot_quality(df)
+    figure_quality_filepath = plot_quality(df)
 
     #plt.show()
 
-    report.write(textwrap.dedent(
-    """
+    report.write('\n\n## Pull request integration velocity\n\n')
+    include_figure(
+        report,
+        figure_latency_filepath,
+        'Pull request integration latency'
+    )
+    include_figure(
+        report,
+        figure_throughput_filepath,
+        'Pull request integration throughput'
+    )
+    include_figure(
+        report,
+        figure_quality_filepath,
+        'Pull request integration verlocity'
+    )
 
-    ## Pull request integration velocity report
 
-    """
-    ).strip())
+def include_figure(report, filepath, heading):
+    report.write(f'\n\n[![{heading}]({filepath} "{heading}")](file://{filepath})\n\n')
 
 
 # What is good is low time to merge, and many pull requests merged per time.
@@ -666,7 +677,7 @@ def plot_quality(df):
     df['quality'].plot()
     plt.xlabel('Time')
     plt.ylabel('Throughput [1/day] / latency [day]')
-    set_title('PR integration quality for PRs in both DC/OS repos')
+    set_title('PR integration velocity for PRs in both DC/OS repos')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #     matcher.subtitle
     # set_subtitle('Raw data')
@@ -700,7 +711,7 @@ def plot_throughput(filtered_prs):
         color='black',
         markersize=5,
     )
-    plt.xlabel('Time (UTC)')
+    plt.xlabel('Time')
     plt.ylabel('Throughput [1/day], rolling window of 3 weeks width')
     set_title('Pull request throughput for PRs in both DC/OS repos')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
@@ -723,7 +734,7 @@ def plot_latency(df):
     )
     plt.xlabel('Pull request creation time')
     plt.ylabel('Time-to-merge latency [day], rolling window of 3 weeks width')
-    set_title('Time-to-merge for PRs in mesosphere/dcos-enterprise')
+    set_title('Time-to-merge for PRs in both DC/OS repositories')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #    matcher.subtitle
     set_subtitle('Raw data')
