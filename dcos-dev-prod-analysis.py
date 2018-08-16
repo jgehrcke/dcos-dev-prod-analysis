@@ -133,7 +133,16 @@ def analyze_pr_comments(prs, report):
 
     report.write('\n\n## Status check override report (CI instability)\n\n')
 
-    report.write('\n\n### Plots and other stats\n\n')
+    report.write('\n\n### Override command rate over time and top override issuer\n\n')
+
+    topn = 10
+    report.write(f'\nTop {topn} override comment issuer:\n\n')
+    counter = Counter([oc['comment_obj'].user.login for oc in all_override_comments])
+    tabletext = get_mdtable(
+        ['GitHub login', 'Number of overrides'],
+        [[item, count] for item, count in counter.most_common(topn)],
+    )
+    report.write(tabletext)
 
     figure_file_abspath = plot_override_comment_rate(all_override_comments)
     include_figure(
@@ -142,24 +151,29 @@ def analyze_pr_comments(prs, report):
         'Override comment rate plotted over time'
     )
 
-    topn = 10
-    report.write(f'\n**Top {topn} override comment submitter:**\n\n')
-    counter = Counter([oc['comment_obj'].user.login for oc in all_override_comments])
-    tabletext = get_mdtable(
-        ['GitHub login', 'Number of overrides'],
-        [[item, count] for item, count in counter.most_common(topn)],
+    reportfragment = analyze_overrides(
+        'Most frequent overrides (last 10 days)',
+        10,
+        all_override_comments,
+        prs
     )
-    report.write(tabletext)
-
-    reportfragment = analyze_overrides('All-time stats', 10**4, all_override_comments, prs)
     report.write(reportfragment.getvalue())
 
-    reportfragment = analyze_overrides('Last 10 days', 10, all_override_comments, prs)
+    reportfragment = analyze_overrides(
+        'Most frequent overrides (last 30 days)',
+        30,
+        all_override_comments,
+        prs
+    )
     report.write(reportfragment.getvalue())
 
-    reportfragment = analyze_overrides('Last 30 days', 30, all_override_comments, prs)
+    reportfragment = analyze_overrides(
+        'Most frequent overrides (all-time)',
+        10**4,
+        all_override_comments,
+        prs
+    )
     report.write(reportfragment.getvalue())
-
 
 
 def analyze_overrides(heading, max_age_days, all_override_comments, prs):
