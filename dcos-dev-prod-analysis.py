@@ -53,6 +53,9 @@ def main():
         itertools.chain(prs_downstream.values(), prs_upstream.values())
     ]
 
+    newest_pr_created_at = max(pr.created_at for pr in prs_for_comment_analysis)
+    newest_pr_created_at_text = newest_pr_created_at.strftime('%Y-%m-%d %H:%M UTC')
+
     matplotlib_config()
 
     now_text = NOW.strftime('%Y-%m-%d %H:%M UTC')
@@ -67,6 +70,8 @@ def main():
     `mesosphere/dcos-enterprise` and the `dcos/dcos` repository. The code for
     generating this report lives in
     [`jgehrcke/dcos-dev-prod-analysis`](https://github.com/jgehrcke/dcos-dev-prod-analysis).
+    The newest pull request considered for this report was created at {newest_pr_created_at_text}.
+
 
     """
     ).strip())
@@ -133,6 +138,11 @@ def analyze_pr_comments(prs, report):
 
     report.write('\n\n## Status check override report (CI instability)\n\n')
 
+    newest_oc_created_at = max(oc['comment_obj'].created_at for oc in all_override_comments)
+    newest_oc_created_at_text = newest_oc_created_at.strftime('%Y-%m-%d %H:%M UTC')
+
+    report.write(f'The newest pull request considered for this report was created at {newest_oc_created_at_text}.')
+
     report.write('\n\n### Override command rate over time and top override issuer\n\n')
 
     topn = 10
@@ -142,7 +152,7 @@ def analyze_pr_comments(prs, report):
         ['GitHub login', 'Number of overrides'],
         [[item, count] for item, count in counter.most_common(topn)],
     )
-    report.write(tabletext)
+    report.write(f'{tabletext}\n\n')
 
     figure_file_abspath = plot_override_comment_rate(all_override_comments)
     include_figure(
@@ -268,7 +278,7 @@ def build_histograms_from_ocs(override_comments, reportfragment):
     topn = 10
 
     print(f'   Top {topn} JIRA tickets used in override comments')
-    reportfragment.write(f'\n**Top {topn} JIRA tickets:**\n\n')
+    reportfragment.write(f'\nTop {topn} JIRA tickets:\n\n')
 
     counter = Counter([oc['ticket'] for oc in override_comments])
     tabletext = get_mdtable(
@@ -278,7 +288,7 @@ def build_histograms_from_ocs(override_comments, reportfragment):
     reportfragment.write(tabletext)
 
     print(f'   Top {topn} CI check names used in override comments')
-    reportfragment.write(f'\n**Top {topn} status keys (check names):**\n\n')
+    reportfragment.write(f'\nTop {topn} status keys (check names):\n\n')
 
     counter = Counter([oc['checkname'] for oc in override_comments])
     tabletext = get_mdtable(
