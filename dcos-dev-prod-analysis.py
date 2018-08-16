@@ -90,7 +90,7 @@ def main():
         f.write(report_md_text.encode('utf-8'))
 
 
-def analyze_pr_comments(prs, override_report):
+def analyze_pr_comments(prs, report):
     """
     Analyze the issue comments in all pull request objects in `prs`.
 
@@ -123,28 +123,42 @@ def analyze_pr_comments(prs, override_report):
           'comments, all data for sanity check')
     print(Counter([oc['checkname'] for oc in all_override_comments]))
 
+    print('\n** Histogram over comment creator for all override '
+          'comments')
+    print(Counter([oc['comment_obj'].user.login for oc in all_override_comments]))
+
     # Now output the same kinds of stats for different periods of times. Stats
     # extracted from a more narrow time window from the recent past are probably
     # more relevant in practice.
 
-    override_report.write('\n\n## Status check override report (CI instability)\n\n')
+    report.write('\n\n## Status check override report (CI instability)\n\n')
 
-    reportfragment = analyze_overrides('All-time stats', 10**4, all_override_comments, prs)
-    override_report.write(reportfragment.getvalue())
+    report.write('\n\n### Plots and other stats\n\n')
 
-    # Include figure in report: override command rate over time.
     figure_file_abspath = plot_override_comment_rate(all_override_comments)
     include_figure(
-        override_report,
+        report,
         figure_file_abspath,
         'Override comment rate plotted over time'
     )
 
+    topn = 10
+    report.write(f'\n**Top {topn} override comment submitter:**\n\n')
+    counter = Counter([oc['comment_obj'].user.login for oc in all_override_comments])
+    tabletext = get_mdtable(
+        ['GitHub login', 'Number of overrides'],
+        [[item, count] for item, count in counter.most_common(topn)],
+    )
+    report.write(tabletext)
+
+    reportfragment = analyze_overrides('All-time stats', 10**4, all_override_comments, prs)
+    report.write(reportfragment.getvalue())
+
     reportfragment = analyze_overrides('Last 10 days', 10, all_override_comments, prs)
-    override_report.write(reportfragment.getvalue())
+    report.write(reportfragment.getvalue())
 
     reportfragment = analyze_overrides('Last 30 days', 30, all_override_comments, prs)
-    override_report.write(reportfragment.getvalue())
+    report.write(reportfragment.getvalue())
 
 
 
@@ -560,7 +574,7 @@ def plot_override_comment_rate(override_comments):
     )
 
     set_title('Override command rate (from both DC/OS repositories)')
-    set_subtitle('Arithmetic mean over rolling window')
+    set_subtitle('Arithmetic mean over rolling time window')
 
     plt.tight_layout(rect=(0, 0, 1, 0.95))
     return savefig('Override command rate')
