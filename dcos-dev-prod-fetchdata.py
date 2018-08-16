@@ -68,6 +68,14 @@ def fetch_prs_with_comments_for_repo(repo, reponame):
 def fetch_comments_for_all_prs(prs_current_without_comments, reponame):
     # Expect `prs` to be a dictionary with the values being PullRequest objects.
 
+    # Note(JP): for the more recent pull requests it is likely that there have
+    # been comments incoming after the last update. That is, the fact that a
+    # pull request was processed in a previous run does not mean that all of its
+    # currently associated issue comments have been fetched. To make this
+    # problem go away reliably requires making an HTTP request per pull request
+    # which is precisely not what we want to do here (let alone of GitHub's API
+    # rate limit). A 'good enough' best effort approach is to look at pull
+    # requests from the last 30 days and to fetch all their associated comments.
     log.info('Collect issue comments for each PR individually.')
 
     # name_prefix =
