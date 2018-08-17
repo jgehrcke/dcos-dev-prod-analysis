@@ -222,10 +222,22 @@ def fetch_pull_requests(repo, reponame):
     persist_filepath = reponame + '_pull-requests.pickle'
     prs = load_file_if_exists(persist_filepath)
     if prs is not None:
+        # Note(JP): in addition to loading from disk a lightweight best-effort
+        # update is performed using the GET /repos/:owner/:repo/pulls call with
+        # appropriate usage of the `state` and `sort` parameters. Note however
+        # that this is probably still imperfect, with a systematic error
+        # accumulating over time. That is, a regular complete refresh of the
+        # data is advisable anyway.
+        log.info('Get first page of last updated PRs from GitHub')
+        updated_prs = repo.get_pulls('all', sort='updated').get_page(0)
+        log.info(f'Got {len(updated_prs)} PRs')
+        for updated_pr in updated_prs:
+            # Replace the PR loaded from disk with its updated variant.
+            prs[updated_pr.number] = updated_pr
+        # Return what was read from disk (plus best-effort update)
         return prs
 
     reqlimit_before = GHUB.rate_limiting[0]
-
     prs = {}
     for count, pr in enumerate(repo.get_pulls('all'), 1):
         # Store `PullRequest` object with integer key in dictionary.
