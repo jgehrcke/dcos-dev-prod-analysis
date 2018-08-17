@@ -19,6 +19,8 @@ import os
 import pickle
 import concurrent.futures
 
+from datetime import datetime
+
 from github import Github
 
 
@@ -29,7 +31,7 @@ logging.basicConfig(
     datefmt="%y%m%d-%H:%M:%S"
     )
 
-
+NOW = datetime.utcnow()
 GHUB = Github(
     os.environ['GITHUB_USERNAME'],
     os.environ['GITHUB_APITOKEN'],
@@ -68,14 +70,6 @@ def fetch_prs_with_comments_for_repo(repo, reponame):
 def fetch_comments_for_all_prs(prs_current_without_comments, reponame):
     # Expect `prs` to be a dictionary with the values being PullRequest objects.
 
-    # Note(JP): for the more recent pull requests it is likely that there have
-    # been comments incoming after the last update. That is, the fact that a
-    # pull request was processed in a previous run does not mean that all of its
-    # currently associated issue comments have been fetched. To make this
-    # problem go away reliably requires making an HTTP request per pull request
-    # which is precisely not what we want to do here (let alone of GitHub's API
-    # rate limit). A 'good enough' best effort approach is to look at pull
-    # requests from the last 30 days and to fetch all their associated comments.
     log.info('Collect issue comments for each PR individually.')
 
     # name_prefix =
@@ -97,21 +91,57 @@ def fetch_comments_for_all_prs(prs_current_without_comments, reponame):
             len(prs_old_with_comments)
         )
 
+        prs_to_fetch_comments_for = {}
+
+        # See which PRs are new, compared to what was persisted to disk.
         new_pr_numbers = set(prs_current_without_comments.keys()) - \
             set(prs_old_with_comments.keys())
 
-        prs_to_fetch_comments_for = {
-            n: prs_current_without_comments[n] for n in new_pr_numbers
-        }
-
-        if not prs_to_fetch_comments_for:
-            log.info('Nothing to fetch, data on disk is up-to-date')
-            return prs_old_with_comments
+        # For the newly seen PRs we definitely need to fetch comments.
+        for n in new_pr_numbers:
+            prs_to_fetch_comments_for[n] = prs_current_without_comments[n]
 
         log.info(
             'Fetching comments for %s new PRs',
             len(prs_to_fetch_comments_for)
         )
+
+        # Note(JP): for the more recent pull requests it is likely that there
+        # have been comments incoming after the last update. That is, the fact
+        # that a pull request was processed in a previous run does not mean that
+        # all of its currently associated issue comments have been fetched. To
+        # make this problem go away reliably requires making an HTTP request per
+        # pull request which is precisely not what we want to do here (let alone
+        # as of GitHub's API rate limit). A 'good enough' best effort approach
+        # for now is to look at pull requests from the last 30 days and to fetch
+        # all their associated comments. A complete re-fetch of all pull
+        # requests and their associated comments every now and then is required
+        # to make sure that new comments made in old pull requests are not
+        # missed.
+        max_age_days = 30
+        old_prs_to_analyze = []
+        log.info('Identifying most recent PRs')
+        for _, pr in prs_old_with_comments.items():
+            # `pr.created_at` sadly is a native datetime object. It is known to
+            # represent the time in UTC, however. `NOW` also is a datetime
+            # object explicitly in UTC.
+            age = NOW - pr.created_at
+            if age.total_seconds() < 60 * 60 * 24 * max_age_days:
+                old_prs_to_analyze.append(pr)
+
+        log.info('Most recent PRs: %s', old_prs_to_analyze)
+
+        log.info(
+            'Fetching comments for %s recent PRs',
+            len(old_prs_to_analyze)
+        )
+
+        for pr in old_prs_to_analyze:
+            prs_to_fetch_comments_for[pr.number] = pr
+
+        if not prs_to_fetch_comments_for:
+            log.info('Nothing to fetch, data on disk is up-to-date')
+            return prs_old_with_comments
 
     else:
         prs_to_fetch_comments_for = prs_current_without_comments
