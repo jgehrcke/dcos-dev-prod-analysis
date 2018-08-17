@@ -138,15 +138,15 @@ def analyze_pr_comments(prs, report):
 
     report.write('\n\n## Status check override report (CI instability)\n\n')
 
+    # Identify and leave note about newest override command.
     newest_oc_created_at = max(oc['comment_obj'].created_at for oc in all_override_comments)
     newest_oc_created_at_text = newest_oc_created_at.strftime('%Y-%m-%d %H:%M UTC')
-
-    report.write(f'The newest pull request considered for this report was created at {newest_oc_created_at_text}.')
+    report.write(f'The newest override command considered for this report was issued at {newest_oc_created_at_text}.')
 
     report.write('\n\n### Override command rate over time and top override issuer\n\n')
 
     topn = 10
-    report.write(f'\nTop {topn} override comment issuer:\n\n')
+    report.write(f'\nTop {topn} override command issuer:\n\n')
     counter = Counter([oc['comment_obj'].user.login for oc in all_override_comments])
     tabletext = get_mdtable(
         ['GitHub login', 'Number of overrides'],
