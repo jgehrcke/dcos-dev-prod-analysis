@@ -229,11 +229,19 @@ def fetch_pull_requests(repo, reponame):
         # accumulating over time. That is, a regular complete refresh of the
         # data is advisable anyway.
         log.info('Get first page of last updated PRs from GitHub')
-        updated_prs = repo.get_pulls('all', sort='updated').get_page(0)
-        log.info(f'Got {len(updated_prs)} PRs')
-        for updated_pr in updated_prs:
+        lastupdated_prs = repo.get_pulls('all', sort='updated', direction='desc').get_page(0)
+        log.info(f'Got {len(lastupdated_prs)} PRs')
+        for lastupdated_pr in lastupdated_prs:
             # Replace the PR loaded from disk with its updated variant.
-            prs[updated_pr.number] = updated_pr
+            prs[lastupdated_pr.number] = lastupdated_pr
+
+        log.info('Get first page of last created PRs from GitHub')
+        lastcreated_prs = repo.get_pulls('all').get_page(0)
+        log.info(f'Got {len(lastcreated_prs)} PRs')
+        for lastcreated_pr in lastcreated_prs:
+            # Replace the PR loaded from disk with its updated variant.
+            prs[lastcreated_pr.number] = lastcreated_pr
+
         # Return what was read from disk (plus best-effort update)
         return prs
 
