@@ -627,6 +627,15 @@ def analyze_merged_prs(prs, report):
     filtered_prs = [pr for pr in prs if pr.merged_at is not None]
     log.info('Number of filtered pull requests: %s', len(filtered_prs))
 
+    # Hopefully helpful note: `pr.head.label` is e.g.
+    # `mesosphere:mergebot/dcos/1.11/3292` for a pull request created in
+    # mesosphere/dcos-enterprise created by Mergebot as of a bump-ee command.
+
+    # Proceed with analyzing only those pull requests that were not created by
+    # mergebot. This ignores an important class of pull request: all downstream
+    # PRs created via the bump-ee command. This is an intentional, following the
+    # idea that a pull request pair comprised of an upstream PR with the
+    # corresponding downstream PR is tracking one unit of change to DC/OS.
     log.info('Filter pull requests not created by mergebot.')
     filtered_prs = [pr for pr in filtered_prs if 'mergebot' not in pr.user.login]
     log.info('Number of filtered pull requests: %s', len(filtered_prs))
@@ -635,10 +644,7 @@ def analyze_merged_prs(prs, report):
     filtered_prs = [pr for pr in filtered_prs if 'train' not in pr.title.lower()]
     log.info('Number of filtered pull requests: %s', len(filtered_prs))
 
-    # Proceed with analyzing only those pull requests that were not created by
-    # mergebot. Note that this ignores an important class of pull request, I
-    # think, all downstream PRs created via the bump-ee command. This is a
-    # severe limtiation, improve this filter. Major goal is to look at train
+    # Major goal is to look at train
     # PRs separately, and to filter PRs by certain criteria in general, such as
     # - how many lines do they change
     # - are these just simple package bumps?
