@@ -29,12 +29,13 @@ contents.
 """
 
 import argparse
-import logging
 import itertools
+import logging
 import os
+import pickle
 import re
 import shutil
-import pickle
+import subprocess
 import textwrap
 
 from io import StringIO
@@ -69,6 +70,9 @@ def main():
         epilog=textwrap.dedent(__doc__).strip()
     )
     parser.add_argument('--output-directory', default='_report')
+    parser.add_argument('--resources-directory', default='resources')
+    parser.add_argument('--pandoc-command', default='pandoc')
+
     args = parser.parse_args()
 
     prs_downstream = load_prs_from_file(
@@ -85,7 +89,7 @@ def main():
             )
             sys.exit(1)
 
-        log.info('Remove output directory %s', args.output_directory)
+        log.info('Remove output directory: %s', args.output_directory)
         shutil.rmtree(args.output_directory)
 
     log.info('Create output directory: %s', args.output_directory)
@@ -140,6 +144,27 @@ def main():
     log.info('Write generated Markdown report to: %s', md_report_filepath)
     with open(md_report_filepath, 'wb') as f:
         f.write(report_md_text.encode('utf-8'))
+
+    log.info('Copy resources directory into output directory')
+    shutil.copytree(args.resources_directory, os.path.join(OUTDIR, 'resources'))
+
+    html_report_filepath = os.path.splitext(md_report_filepath)[0] + '.html'
+    log.info('Trying to run Pandoc for generating HTML document')
+    pandoc_cmd = [
+        args.pandoc_command,
+        '--toc',
+        '--standalone',
+        '--template=resources/template.html',
+        md_report_filepath,
+        '-o',
+        html_report_filepath
+        ]
+    log.info('Running command: %s', ' '.join(pandoc_cmd))
+    p = subprocess.run(pandoc_cmd)
+    if p.returncode == 0:
+        log.info('Pandoc terminated indicating success')
+    else:
+        log.info('Pandoc terminated indicating error')
 
 
 def analyze_pr_comments(prs, report):
@@ -655,7 +680,7 @@ def savefig(title):
     """
     Save figure file to `OUTDIR`.
 
-    Expected to return an absolute path.
+    Expected to return just the base name (not the complete path).
     """
     # Lowercase, replace special chars with whitespace, join on whitespace.
     cleantitle = '-'.join(re.sub('[^a-z0-9]+', ' ', title.lower()).split())
@@ -665,7 +690,7 @@ def savefig(title):
     fpath_figure = os.path.join(OUTDIR, fname + '.png')
     log.info('Writing PNG figure to %s', fpath_figure)
     plt.savefig(fpath_figure, dpi=150)
-    return os.path.abspath(fpath_figure)
+    return os.path.basename(fpath_figure)
 
 
 def analyze_merged_prs(prs, report):
@@ -757,7 +782,7 @@ def analyze_merged_prs(prs, report):
 
 
 def include_figure(report, filepath, heading):
-    report.write(f'\n\n[![{heading}]({filepath} "{heading}")](file://{filepath})\n\n')
+    report.write(f'\n\n[![{heading}]({filepath} "{heading}")]({filepath})\n\n')
 
 
 # What is good is low time to merge, and many pull requests merged per time.
