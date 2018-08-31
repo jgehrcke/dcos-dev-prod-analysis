@@ -13,10 +13,27 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
+"""
+Generates a DC/OS developer report.
+
+Input: pull request data from the two DC/OS repositories, as binary data
+persisted to disk via pickle.
+
+Output: a Markdown document with tables, and figure files.
+
+The output is meant to be transformed to be into an HTML document via e.g.
+pandoc.
+
+Warning: invocation of this program removes the output directory and its
+contents.
+"""
+
+import argparse
 import logging
 import itertools
 import os
 import re
+import shutil
 import pickle
 import textwrap
 
@@ -30,7 +47,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 
-NOW = datetime.utcnow()
 log = logging.getLogger()
 logging.basicConfig(
     level=logging.INFO,
@@ -39,13 +55,43 @@ logging.basicConfig(
     )
 
 
+NOW = datetime.utcnow()
+TODAY = NOW.strftime('%Y-%m-%d')
+OUTDIR = None
+
+
 def main():
+    global OUTDIR
+
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description='Generates a DC/OS developer report as a Markdown document.',
+        epilog=textwrap.dedent(__doc__).strip()
+    )
+    parser.add_argument('--output-directory', default='_report')
+    args = parser.parse_args()
 
     prs_downstream = load_prs_from_file(
         'dcos-enterprise_pull-requests-with-comments.pickle')
 
     prs_upstream = load_prs_from_file(
         'dcos_pull-requests-with-comments.pickle')
+
+    if os.path.exists(args.output_directory):
+        if not os.path.isdir(args.output_directory):
+            log.error(
+                'The specified output directory path does not point to a directory: %s',
+                args.output_directory
+            )
+            sys.exit(1)
+
+        log.info('Remove output directory %s', args.output_directory)
+        shutil.rmtree(args.output_directory)
+
+    log.info('Create output directory: %s', args.output_directory)
+    os.makedirs(args.output_directory)
+
+    OUTDIR = args.output_directory
 
     # Perform override command analysis for all pull requests.
     prs_for_comment_analysis = [
@@ -89,7 +135,8 @@ def main():
         report_md_text
     )
 
-    md_report_filepath = 'dcos-dev-prod-report.md'
+    md_report_filepath = os.path.join(OUTDIR, TODAY + '_dcos-dev-prod-report.md')
+
     log.info('Write generated Markdown report to: %s', md_report_filepath)
     with open(md_report_filepath, 'wb') as f:
         f.write(report_md_text.encode('utf-8'))
@@ -606,16 +653,16 @@ def plot_override_comment_rate(override_comments):
 
 def savefig(title):
     """
+    Save figure file to `OUTDIR`.
+
     Expected to return an absolute path.
     """
-    today = datetime.now().strftime('%Y-%m-%d')
-
     # Lowercase, replace special chars with whitespace, join on whitespace.
     cleantitle = '-'.join(re.sub('[^a-z0-9]+', ' ', title.lower()).split())
 
-    fname = today + '_' + cleantitle
+    fname = TODAY + '_' + cleantitle
 
-    fpath_figure = fname + '.png'
+    fpath_figure = os.path.join(OUTDIR, fname + '.png')
     log.info('Writing PNG figure to %s', fpath_figure)
     plt.savefig(fpath_figure, dpi=150)
     return os.path.abspath(fpath_figure)
