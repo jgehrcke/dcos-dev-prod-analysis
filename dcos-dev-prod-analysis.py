@@ -342,13 +342,7 @@ def analyze_overrides_last_n_days(override_comments, n, reportfragment):
 
 
 def build_histograms_from_ocs(override_comments, reportfragment):
-    comments_with_whitespace_in_checkname = [
-        c for c in override_comments if len(c['checkname'].split()) > 1]
-    nbr_invalid = len(comments_with_whitespace_in_checkname)
-    print(f'   Comments with invalid checkname (whitespace): {nbr_invalid}')
-    reportfragment.write(f'Number of override commands issued with invalid status key: **{nbr_invalid}**.\n\n')
     topn = 10
-
     print(f'   Top {topn} JIRA tickets used in override comments')
     reportfragment.write(f'\nTop {topn} JIRA tickets:\n\n')
 
@@ -540,6 +534,16 @@ def detect_override_comment(comment, pr):
         # wrong. Checknames usually contain slashes. Ticket names don't
         # (at this point).
         if '/' in ticket:
+            log.info('Invalid override command: slash in ticket name (wrong order of args?): %s', ticket)
+            return None
+
+        if not re.search('[A-Z_]+-[0-9]+', ticket):
+            log.info('Invalid override command: ticket does not match regex: %s', ticket)
+            return None
+
+        checkname = match.group('checkname').strip()
+        if len(checkname.split()) > 1:
+            log.info('Invalid override command: whitespace in checkname: `%s`', checkname)
             return None
 
         if linecount > 1:
@@ -550,7 +554,7 @@ def detect_override_comment(comment, pr):
         # program.
         override_comment = {
             'prnumber': pr.number,
-            'checkname': match.group('checkname').strip(),
+            'checkname': checkname,
             'ticket': ticket,
             'comment_obj': comment
         }
