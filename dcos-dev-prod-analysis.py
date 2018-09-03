@@ -69,7 +69,7 @@ def main():
         description='Generates a DC/OS developer report as a Markdown document.',
         epilog=textwrap.dedent(__doc__).strip()
     )
-    parser.add_argument('--output-directory', default='_report')
+    parser.add_argument('--output-directory', default=TODAY + '_report')
     parser.add_argument('--resources-directory', default='resources')
     parser.add_argument('--pandoc-command', default='pandoc')
 
