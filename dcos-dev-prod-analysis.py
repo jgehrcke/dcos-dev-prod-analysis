@@ -276,6 +276,7 @@ def analyze_pr_comments(prs, report):
 
     #### Accumulated override command rate over time
 
+    In this plot all override commands are treated the same:
     """
     ))
 
@@ -288,10 +289,15 @@ def analyze_pr_comments(prs, report):
 
     report.write(textwrap.dedent(
     """
-    Do you see a trend? Are we getting better over time?
+    When you read the plot, ask yourself: do you see a trend? Are we getting
+    better over time (does the overall override command rate decrease)?
 
     #### Override command rate over time resolved by most relevant JIRA tickets
 
+    This plot shows the time evolution of the rate for override commands that
+    refer to special JIRA tickets; those JIRA tickets that were referred to most
+    often in all override commands (the instabilities that they represent are
+    have been dominant pain points, and maybe still are, see for yourself):
     """
     ))
     counter = Counter([oc['ticket'] for oc in all_override_comments])
@@ -307,8 +313,8 @@ def analyze_pr_comments(prs, report):
 
     report.write(textwrap.dedent(
     """
-    Did we fix those instabilities that have hurt us most or are they still
-    getting in the way, day after day?
+    When you read the plot, ask yourself: did we address those instabilities
+    that have hurt us most? Did we fix them properly, or are they coming back?
 
     #### People who issued most of the override commands
 
@@ -452,7 +458,7 @@ def build_histograms_from_ocs(override_comments, reportfragment):
     topn = 10
     print(f'   Top {topn} JIRA tickets used in override comments')
     reportfragment.write(
-        f'\nTop {topn} JIRA tickets (do we work on them? we should!):\n\n')
+        f'\nTop {topn} JIRA tickets (do we work on the topmost? we should!):\n\n')
 
     counter = Counter([oc['ticket'] for oc in override_comments])
     tabletext = get_mdtable(
@@ -941,7 +947,7 @@ def analyze_merged_prs(prs, report):
     include_figure(
         report,
         figure_quality_filepath,
-        'Pull request integration verlocity'
+        'Pull request integration velocity'
     )
 
 
@@ -954,7 +960,7 @@ def include_figure(report, filepath, heading):
 
 
 def plot_quality(df):
-    df['quality'].plot()
+    df['quality'].plot(color='red')
     plt.xlabel('Time')
     plt.ylabel('Throughput [1/day] / latency [day]')
     set_title('PR integration velocity for PRs in both DC/OS repos')
