@@ -116,11 +116,11 @@ def main():
     %
     % Generated on {now_text}
 
-    The report is generated based on GitHub pull request data from both, the
-    `mesosphere/dcos-enterprise` and the `dcos/dcos` repository. The code for
-    generating this report lives in
-    [`jgehrcke/dcos-dev-prod-analysis`](https://github.com/jgehrcke/dcos-dev-prod-analysis).
-    The newest pull request considered for this report was created at {newest_pr_created_at_text}.
+    The report is generated based on GitHub pull request data from both DC/OS
+    repositories. The code for generating this report lives in
+    [`dcos-dev-prod-analysis`](https://github.com/jgehrcke/dcos-dev-prod-analysis).
+    The newest pull request considered for this report was created at
+    {newest_pr_created_at_text}.
 
 
     """
@@ -208,14 +208,56 @@ def analyze_pr_comments(prs, report):
     # extracted from a more narrow time window from the recent past are probably
     # more relevant in practice.
 
-    report.write('\n\n## Status check override report (CI instability)\n\n')
+    report.write(textwrap.dedent(
+    """
+
+    ## Status check override report (CI instability)
+
+    An override command associates the name of a failed CI check with a JIRA
+    ticket tracking the specific cause or symptom of the problem.
+
+    Example: when a developer issues the override command
+    ```
+    override-status teamcity/dcos/test/dcos-e2e/docker/static/strict https://jira.mesosphere.com/browse/DCOS_OSS-2115
+
+    ```
+    they intend to express that the CI check titled
+    `teamcity/dcos/test/dcos-e2e/docker/static/strict` (which itself is
+    comprised of hundreds of individual tests) failed as of a known instability
+    in a specific test called `test_vip` (the details are to be inferred from
+    the corresponding JIRA ticket).
+
+    Every single override command
+
+    - was issued by a human after they have carefully analyzed the specific
+      cause or symptom of the problem.
+    - means that the corresponding developer spent significant time (minutes
+      to hours) figuring out the correct override command.
+
+    That is, override command data is directly representing the pain individual
+    developers experience when they attempt to land patches in the two DC/OS
+    repositories.
+    """
+    ))
 
     # Identify and leave note about newest override command.
     newest_oc_created_at = max(oc['comment_obj'].created_at for oc in all_override_comments)
+    oldest_oc_created_at = min(oc['comment_obj'].created_at for oc in all_override_comments)
     newest_oc_created_at_text = newest_oc_created_at.strftime('%Y-%m-%d %H:%M UTC')
+    oldest_oc_created_at_text = oldest_oc_created_at.strftime('%Y-%m-%d %H:%M UTC')
     report.write(f'The newest override command considered for this report was issued at {newest_oc_created_at_text}.')
+    report.write(f' The oldest override command was issued at {oldest_oc_created_at_text}.')
 
-    report.write('\n\n### Override command rate over time and top override issuer\n\n')
+    report.write(textwrap.dedent(
+   f"""
+
+    ### All-time override commands
+
+    This section shows statistics derived from all override commands issued to
+    date.
+
+    """
+    ))
 
     topn = 10
     report.write(f'\nTop {topn} override command issuer:\n\n')
@@ -226,11 +268,22 @@ def analyze_pr_comments(prs, report):
     )
     report.write(f'{tabletext}\n\n')
 
-    figure_file_abspath = plot_override_comment_rate(all_override_comments)
+    figure_file_abspath = plot_override_comment_rate_two_windows(all_override_comments)
     include_figure(
         report,
         figure_file_abspath,
         'Override comment rate plotted over time'
+    )
+
+    counter = Counter([oc['ticket'] for oc in all_override_comments])
+    top_ticketnames = [ticketname for ticketname, count in counter.most_common(10)]
+    figure_file_abspath = plot_override_comment_rate_multiple_jira_tickets(
+        all_override_comments, top_ticketnames)
+
+    include_figure(
+        report,
+        figure_file_abspath,
+        'Override comment rate plotted over time, resolved by individual JIRA tickets'
     )
 
     reportfragment = analyze_overrides(
