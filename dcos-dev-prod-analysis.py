@@ -288,6 +288,7 @@ def analyze_pr_comments(prs, report):
 
     report.write(textwrap.dedent(
     """
+    Do you see a trend? Are we getting better over time?
 
     #### Override command rate over time resolved by most relevant JIRA tickets
 
@@ -306,13 +307,18 @@ def analyze_pr_comments(prs, report):
 
     report.write(textwrap.dedent(
     """
+    Did we fix those instabilities that have hurt us most or are they still
+    getting in the way, day after day?
 
     #### People who issued most of the override commands
+
+    Let us say THANKS to the people that help landing changes in DC/OS by
+    constructing appropriate override commands:
 
     """
     ))
 
-    topn = 10
+    topn = 15
     # report.write(f'\nTop {topn} override command issuer:\n\n')
     counter = Counter([oc['comment_obj'].user.login for oc in all_override_comments])
     tabletext = get_mdtable(
@@ -320,7 +326,6 @@ def analyze_pr_comments(prs, report):
         [[item, count] for item, count in counter.most_common(topn)],
     )
     report.write(f'{tabletext}\n\n')
-
 
     reportfragment = analyze_overrides(
         'Most frequent overrides (last 10 days)',
@@ -446,7 +451,8 @@ def analyze_overrides_last_n_days(override_comments, n, reportfragment):
 def build_histograms_from_ocs(override_comments, reportfragment):
     topn = 10
     print(f'   Top {topn} JIRA tickets used in override comments')
-    reportfragment.write(f'\nTop {topn} JIRA tickets (do we work on them?):\n\n')
+    reportfragment.write(
+        f'\nTop {topn} JIRA tickets (do we work on them? we should!):\n\n')
 
     counter = Counter([oc['ticket'] for oc in override_comments])
     tabletext = get_mdtable(
@@ -794,8 +800,8 @@ def plot_override_comment_rate_two_windows(override_comments):
 
     plt.xlabel('Time')
     plt.ylabel('Override command rate [1/day]')
-    set_title('Override command rate (from both DC/OS repositories)')
-    set_subtitle('Arithmetic mean over rolling time window')
+    # set_title('Override command rate (from both DC/OS repositories)')
+    # set_subtitle('Arithmetic mean over rolling time window')
     plt.tight_layout(rect=(0, 0, 1, 0.95))
     return savefig('Override command rate')
 
@@ -828,8 +834,8 @@ def plot_override_comment_rate_multiple_jira_tickets(
 
     plt.xlabel('Time')
     plt.ylabel('Override command rate [1/day]')
-    set_title('Override command rate for most frequently tagged JIRA tickets')
-    set_subtitle('Arithmetic mean over rolling time window')
+    # set_title('Override command rate for most frequently tagged JIRA tickets')
+    # set_subtitle('Arithmetic mean over rolling time window')
     plt.tight_layout(rect=(0, 0, 1, 0.95))
     return savefig('Override command rate for top JIRA tickets')
 
