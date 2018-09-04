@@ -968,7 +968,13 @@ def matplotlib_config():
     matplotlib.rcParams['savefig.dpi'] = 150
     # mpl.rcParams['font.size'] = 12
 
+    original_color_cycle = matplotlib.rcParams['axes.prop_cycle']
+
     plt.style.use('ggplot')
+
+    # ggplot's color cylcle seems to be too short for having 8 line plots on the
+    # same Axes.
+    matplotlib.rcParams['axes.prop_cycle'] = original_color_cycle
 
 
 def load_prs_from_file(filepath):
