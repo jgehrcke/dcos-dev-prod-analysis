@@ -698,6 +698,40 @@ def plot_override_comment_rate_two_windows(override_comments):
     return savefig('Override command rate')
 
 
+def plot_override_comment_rate_multiple_jira_tickets(
+        all_override_comments, ticketnames):
+
+    # Create a new figure and an Axes object. Plot all line plots into the same
+    # Axes object.
+    fig = plt.figure()
+    ax = fig.gca()
+
+    for ticketname in ticketnames:
+        ocs = [oc for oc in all_override_comments if oc['ticket'] == ticketname]
+        commentrate_1, window_width_days_1, commentrate_2, window_width_days_2, _, _  = \
+            calc_override_comment_rate(ocs)
+
+        commentrate_2.plot(
+            linestyle='solid',
+            marker='None',
+            markersize=4,
+            ax=ax,
+            )
+
+    ax.legend(
+        [f'{ticketname}' for ticketname in ticketnames],
+        numpoints=4,
+        loc='upper left'
+    )
+
+    plt.xlabel('Time')
+    plt.ylabel('Override command rate [1/day]')
+    set_title('Override command rate for most frequently tagged JIRA tickets')
+    set_subtitle('Arithmetic mean over rolling time window')
+    plt.tight_layout(rect=(0, 0, 1, 0.95))
+    return savefig('Override command rate for top JIRA tickets')
+
+
 def savefig(title):
     """
     Save figure file to `OUTDIR`.
