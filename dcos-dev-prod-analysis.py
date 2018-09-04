@@ -670,13 +670,11 @@ def plot_override_comment_rate_two_windows(override_comments):
         calc_override_comment_rate(override_comments)
 
     ax = commentrate_1.plot(
-        linestyle='dashdot',
+        linestyle='solid',
         color='gray',
     )
-    plt.xlabel('Time (UTC)')
-    plt.ylabel('Override command rate [1/day]')
 
-    ax2 = commentrate_2.plot(
+    commentrate_2.plot(
         linestyle='solid',
         marker='None',
         color='black',
@@ -692,9 +690,10 @@ def plot_override_comment_rate_two_windows(override_comments):
         numpoints=4
     )
 
+    plt.xlabel('Time')
+    plt.ylabel('Override command rate [1/day]')
     set_title('Override command rate (from both DC/OS repositories)')
     set_subtitle('Arithmetic mean over rolling time window')
-
     plt.tight_layout(rect=(0, 0, 1, 0.95))
     return savefig('Override command rate')
 
