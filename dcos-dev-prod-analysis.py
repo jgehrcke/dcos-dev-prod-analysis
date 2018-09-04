@@ -36,6 +36,7 @@ import pickle
 import re
 import shutil
 import subprocess
+import sys
 import textwrap
 
 from io import StringIO
@@ -140,7 +141,8 @@ def main():
     report_md_text = markdownreport.getvalue()
     # Match JIRA ticket string only when there is a leading space
     report_md_text = re.sub(
-        " (?P<ticket>[A-Z_]+-[0-9]+)", " [\g<ticket>](https://jira.mesosphere.com/browse/\g<ticket>)",
+        " (?P<ticket>[A-Z_]+-[0-9]+)",
+        " [\g<ticket>](https://jira.mesosphere.com/browse/\g<ticket>)",
         report_md_text
     )
 
@@ -648,7 +650,11 @@ def detect_override_comment(comment, pr):
         # wrong. Checknames usually contain slashes. Ticket names don't
         # (at this point).
         if '/' in ticket:
-            log.info('Invalid override command: slash in ticket name (wrong order of args?): %s', ticket)
+            log.info(
+                'Invalid override command: slash in ticket name '
+                '(wrong order of args?): %s',
+                ticket
+            )
             return None
 
         if not re.search('[A-Z_]+-[0-9]+', ticket):
@@ -822,7 +828,7 @@ def plot_override_comment_rate_multiple_jira_tickets(
 
     for ticketname in ticketnames:
         ocs = [oc for oc in all_override_comments if oc['ticket'] == ticketname]
-        commentrate_1, window_width_days_1, commentrate_2, window_width_days_2, _, _  = \
+        commentrate_1, window_width_days_1, commentrate_2, window_width_days_2, _, _ = \
             calc_override_comment_rate(ocs)
 
         commentrate_2.plot(
@@ -930,8 +936,6 @@ def analyze_merged_prs(prs, report):
     df['quality'] = quality
 
     figure_quality_filepath = plot_quality(df)
-
-    #plt.show()
 
     report.write('\n\n## Pull request integration velocity\n\n')
     include_figure(
