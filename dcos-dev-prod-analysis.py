@@ -563,19 +563,19 @@ def detect_override_comment(comment, pr):
     return None
 
 
-def plot_override_comment_rate(override_comments):
+def calc_override_comment_rate(override_comments):
 
     # Rolling window of one week width. The column does not matter, only
     # evaluate number of events (rows) in the rolling window, and count them,
     # then normalize.
 
-    df = pd.DataFrame(
+    df_raw = pd.DataFrame(
         {'foo': [1 for c in override_comments]},
         index=[pd.Timestamp(c['comment_obj'].created_at) for c in override_comments]
     )
 
     # Sort by time (comment creation time).
-    df.sort_index(inplace=True)
+    df_raw.sort_index(inplace=True)
 
     # Resample so that there is one data point per day (this downsamples most of
     # the time, and upsamples during other times, such as holidays). Count
@@ -649,6 +649,14 @@ def plot_override_comment_rate(override_comments):
     offset = pd.DateOffset(seconds=window_width_days_2*24*60*60 / 2.0)
     commentrate_2.index = commentrate_2.index - offset
     commentrate_2 = commentrate_2[window_width_days_2:]
+
+    return commentrate_1, window_width_days_1, commentrate_2, window_width_days_2, df_raw, df_resampled
+
+
+def plot_override_comment_rate_two_windows(override_comments):
+
+    commentrate_1, window_width_days_1, commentrate_2, window_width_days_2, _, _ = \
+        calc_override_comment_rate(override_comments)
 
     ax = commentrate_1.plot(
         linestyle='dashdot',
