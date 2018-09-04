@@ -105,8 +105,8 @@ def main():
 
     newest_pr_created_at = max(pr.created_at for pr in prs_for_comment_analysis)
     newest_pr_created_at_text = newest_pr_created_at.strftime('%Y-%m-%d %H:%M UTC')
-
-    matplotlib_config()
+    oldest_pr_created_at = min(pr.created_at for pr in prs_for_comment_analysis)
+    oldest_pr_created_at_text = oldest_pr_created_at.strftime('%Y-%m-%d %H:%M UTC')
 
     now_text = NOW.strftime('%Y-%m-%d %H:%M UTC')
     markdownreport = StringIO()
@@ -114,17 +114,21 @@ def main():
     f"""
     % DC/OS developer productivity report
     %
-    % Generated on {now_text}
+    % {now_text}
 
     The report is generated based on GitHub pull request data from both DC/OS
     repositories. The code for generating this report lives in
     [`dcos-dev-prod-analysis`](https://github.com/jgehrcke/dcos-dev-prod-analysis).
     The newest pull request considered for this report was created at
-    {newest_pr_created_at_text}.
+    {newest_pr_created_at_text}. The oldest pull request was created at
+    {oldest_pr_created_at_text}.
 
 
     """
     ).strip())
+
+    # Lazy-perform MPL config (fail fast above).
+    matplotlib_config()
 
     analyze_pr_comments(prs_for_comment_analysis, markdownreport)
 
@@ -212,32 +216,45 @@ def analyze_pr_comments(prs, report):
     report.write(textwrap.dedent(
     """
 
-    ## Status check override report (CI instability)
+    ## Status check override report (CI instability analysis)
 
-    An override command associates the name of a failed CI check with a JIRA
-    ticket tracking the specific cause or symptom of the problem.
+    ### On the significance of override command data
 
-    Example: when a developer issues the override command
+    A status check override command is issued by a human on a pull request via a
+    GitHub comment. An override command associates the name of a failed CI check
+    (from here on called _check name_) with a JIRA ticket tracking the specific
+    cause or symptom of the problem. Example: when a developer issues the
+    override command
     ```
     override-status teamcity/dcos/test/dcos-e2e/docker/static/strict https://jira.mesosphere.com/browse/DCOS_OSS-2115
 
     ```
-    they intend to express that the CI check titled
-    `teamcity/dcos/test/dcos-e2e/docker/static/strict` (which itself is
-    comprised of hundreds of individual tests) failed as of a known instability
-    in a specific test called `test_vip` (the details are to be inferred from
-    the corresponding JIRA ticket).
+    they intend to express that
 
-    Every single override command
+    - the CI check with the check name
+      `teamcity/dcos/test/dcos-e2e/docker/static/strict` (which itself is
+      comprised of hundreds of individual tests) failed as of a known
+      instability in a specific test called `test_vip` (the details are to be
+      inferred from the corresponding JIRA ticket DCOS_OSS-2115), and that
+    - this failure is unrelated to their patch (which is why they would like to
+      _override_ the CI check result from _failed_ to _passed_).
 
-    - was issued by a human after they have carefully analyzed the specific
-      cause or symptom of the problem.
-    - means that the corresponding developer spent significant time (minutes
-      to hours) figuring out the correct override command.
+    Each individual override command
 
-    That is, override command data is directly representing the pain individual
-    developers experience when they attempt to land patches in the two DC/OS
-    repositories.
+    - means that the integration of the pull request it was issued in was
+      delayed by one or more CI checks failing as of problems unrelated to the
+      patch (that is annoying, isn't it?).
+    - was issued by a human after they have analyzed the specific cause or
+      symptom of the problem.
+    - implies that the corresponding developer spent significant time (minutes
+      to hours) figuring out the appropriate override command (this may require
+      debugging, doing a JIRA search, creating a JIRA ticket, ...).
+
+    That is, override command data represent real pain experienced by individual
+    developers as of CI instabilities. These data are the best source for
+    assessing urgency and importance of individual debugging efforts and
+    mitigations.
+
     """
     ))
 
@@ -246,28 +263,21 @@ def analyze_pr_comments(prs, report):
     oldest_oc_created_at = min(oc['comment_obj'].created_at for oc in all_override_comments)
     newest_oc_created_at_text = newest_oc_created_at.strftime('%Y-%m-%d %H:%M UTC')
     oldest_oc_created_at_text = oldest_oc_created_at.strftime('%Y-%m-%d %H:%M UTC')
-    report.write(f'The newest override command considered for this report was issued at {newest_oc_created_at_text}.')
-    report.write(f' The oldest override command was issued at {oldest_oc_created_at_text}.')
-
     report.write(textwrap.dedent(
-   f"""
+    f"""
 
-    ### All-time override commands
+    ### At which rate are override commands issued? Who issues most of them?
 
     This section shows statistics derived from all override commands issued to
-    date.
+    date. The newest override command considered for this report was issued at
+    {newest_oc_created_at_text}. The oldest override command was issued at
+    {oldest_oc_created_at_text}.
+
+
+    #### Accumulated override command rate over time
 
     """
     ))
-
-    topn = 10
-    report.write(f'\nTop {topn} override command issuer:\n\n')
-    counter = Counter([oc['comment_obj'].user.login for oc in all_override_comments])
-    tabletext = get_mdtable(
-        ['GitHub login', 'Number of overrides'],
-        [[item, count] for item, count in counter.most_common(topn)],
-    )
-    report.write(f'{tabletext}\n\n')
 
     figure_file_abspath = plot_override_comment_rate_two_windows(all_override_comments)
     include_figure(
@@ -276,6 +286,13 @@ def analyze_pr_comments(prs, report):
         'Override comment rate plotted over time'
     )
 
+    report.write(textwrap.dedent(
+    """
+
+    #### Override command rate over time resolved by most relevant JIRA tickets
+
+    """
+    ))
     counter = Counter([oc['ticket'] for oc in all_override_comments])
     top_ticketnames = [ticketname for ticketname, count in counter.most_common(10)]
     figure_file_abspath = plot_override_comment_rate_multiple_jira_tickets(
@@ -286,6 +303,24 @@ def analyze_pr_comments(prs, report):
         figure_file_abspath,
         'Override comment rate plotted over time, resolved by individual JIRA tickets'
     )
+
+    report.write(textwrap.dedent(
+    """
+
+    #### People who issued most of the override commands
+
+    """
+    ))
+
+    topn = 10
+    # report.write(f'\nTop {topn} override command issuer:\n\n')
+    counter = Counter([oc['comment_obj'].user.login for oc in all_override_comments])
+    tabletext = get_mdtable(
+        ['GitHub login', 'Number of overrides'],
+        [[item, count] for item, count in counter.most_common(topn)],
+    )
+    report.write(f'{tabletext}\n\n')
+
 
     reportfragment = analyze_overrides(
         'Most frequent overrides (last 10 days)',
@@ -326,7 +361,16 @@ def analyze_overrides(heading, max_age_days, all_override_comments, prs):
     collector = defaultdict(list)
     for comment in all_override_comments:
         collector[comment['ticket']].append(comment['comment_obj'].created_at)
-    reportfragment.write(f'JIRA tickets from override commands used for the first time within the last {max_age_days} days:\n\n')
+
+    reportfragment.write(textwrap.dedent(
+    f"""
+
+    JIRA tickets from override commands used for the first time within the last
+    {max_age_days} days (these are new instabilities and they should probably be
+    addressed!):\n\n
+
+    """
+    ))
 
     newtickets = []
     count = 0
@@ -402,7 +446,7 @@ def analyze_overrides_last_n_days(override_comments, n, reportfragment):
 def build_histograms_from_ocs(override_comments, reportfragment):
     topn = 10
     print(f'   Top {topn} JIRA tickets used in override comments')
-    reportfragment.write(f'\nTop {topn} JIRA tickets:\n\n')
+    reportfragment.write(f'\nTop {topn} JIRA tickets (do we work on them?):\n\n')
 
     counter = Counter([oc['ticket'] for oc in override_comments])
     tabletext = get_mdtable(
@@ -412,11 +456,11 @@ def build_histograms_from_ocs(override_comments, reportfragment):
     reportfragment.write(tabletext)
 
     print(f'   Top {topn} CI check names used in override comments')
-    reportfragment.write(f'\nTop {topn} status keys (check names):\n\n')
+    reportfragment.write(f'\nTop {topn} CI status check names:\n\n')
 
     counter = Counter([oc['checkname'] for oc in override_comments])
     tabletext = get_mdtable(
-        ['Status check', 'Number of overrides'],
+        ['Status check name', 'Number of overrides'],
         [[item, count] for item, count in counter.most_common(topn)],
     )
     reportfragment.write(tabletext)
