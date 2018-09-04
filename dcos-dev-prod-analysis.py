@@ -577,12 +577,19 @@ def calc_override_comment_rate(override_comments):
     # Sort by time (comment creation time).
     df_raw.sort_index(inplace=True)
 
-    # Resample so that there is one data point per day (this downsamples most of
-    # the time, and upsamples during other times, such as holidays). Count
+    # Resample so that there is one data point per hour (this downsamples
+    # sometime when multiple commands were issued within the same hour, and
+    # upsamples during other times, such as night time and holiday time). Count
     # number of values within each bucket (the number of override commands per
-    # day). For those days where there is no data point at all `count()` results
-    # in a value of 0.
-    df = df.resample('1D').count()
+    # hour). For those hours where there is no data point at all `count()`
+    # results in a value of 0. Add an offset of 0.5 hours so that the data
+    # points are actually e.g. `2017-12-17 12:30:00` instead of `2017-12-17
+    # 12:00:00`. Otherwise there would be a systematic time shift in the data
+    # after resampling.
+    df_resampled = df_raw.resample('1H').count()
+    # Note(JP): if this a resolution of 1 hour is ever a performance problem
+    # then decrease resolution to one day:
+    # df_resampled = df_raw.resample('1D', loffset='12H').count()
 
     # Example for how the dataframe can look like here:
     #
@@ -607,7 +614,7 @@ def calc_override_comment_rate(override_comments):
     # because as of here the value per data points represents the number of
     # override commands issued per day.
     window_width_days_1 = 3
-    rollingwindow_1 = df['foo'].rolling(
+    rollingwindow_1 = df_resampled['foo'].rolling(
         window='%sD' % window_width_days_1,
         min_periods=0
     )
@@ -624,8 +631,10 @@ def calc_override_comment_rate(override_comments):
     # not implemented for datetimelike and offset based windows`. As a
     # workaround, shift the data by half the window size to 'the left': shift
     # the timestamp index by a constant / offset.
-    offset = pd.DateOffset(seconds=window_width_days_1*24*60*60 / 2.0)
-    commentrate_1.index = commentrate_1.index - offset
+    # Add an epsilon (one second) for working around a plotting bug
+    # https://github.com/pandas-dev/pandas/issues/22586
+    offset_seconds = - int(window_width_days_1 * 24 * 60 * 60 / 2.0) + 1
+    commentrate_1 = commentrate_1.shift(offset_seconds, freq='s')
 
     # In the resulting time series, all leftmost values up to the rolling window
     # width are dominated by the effect that the rolling window (incoming from
@@ -640,14 +649,16 @@ def calc_override_comment_rate(override_comments):
 
     # Same thing for a more wide rolling window.
     window_width_days_2 = 14
-    rollingwindow_2 = df['foo'].rolling(
+    rollingwindow_2 = df_resampled['foo'].rolling(
         window='%sD' % window_width_days_2,
         min_periods=0
     )
     commentrate_2 = rollingwindow_2.sum() / float(window_width_days_2)
 
-    offset = pd.DateOffset(seconds=window_width_days_2*24*60*60 / 2.0)
-    commentrate_2.index = commentrate_2.index - offset
+    # Add an epsilon (one second) for working around a plotting bug
+    # https://github.com/pandas-dev/pandas/issues/22586
+    offset_seconds = - int(window_width_days_2 * 24 * 60 * 60 / 2.0) + 1
+    commentrate_2 = commentrate_2.shift(offset_seconds, freq='s')
     commentrate_2 = commentrate_2[window_width_days_2:]
 
     return commentrate_1, window_width_days_1, commentrate_2, window_width_days_2, df_raw, df_resampled
