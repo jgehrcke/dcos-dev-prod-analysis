@@ -134,8 +134,9 @@ def main():
 
     log.info('Rewrite JIRA ticket IDs in the Markdown report')
     report_md_text = markdownreport.getvalue()
+    # Match JIRA ticket string only when there is a leading space
     report_md_text = re.sub(
-        "[A-Z_]+-[0-9]+", "[\g<0>](https://jira.mesosphere.com/browse/\g<0>)",
+        " (?P<ticket>[A-Z_]+-[0-9]+)", " [\g<ticket>](https://jira.mesosphere.com/browse/\g<ticket>)",
         report_md_text
     )
 
@@ -327,6 +328,7 @@ def analyze_overrides(heading, max_age_days, all_override_comments, prs):
         collector[comment['ticket']].append(comment['comment_obj'].created_at)
     reportfragment.write(f'JIRA tickets from override commands used for the first time within the last {max_age_days} days:\n\n')
 
+    newtickets = []
     count = 0
     for ticket, created_dates in collector.items():
         earliest_date = min(created_dates)
@@ -334,15 +336,18 @@ def analyze_overrides(heading, max_age_days, all_override_comments, prs):
         if age.total_seconds() < 60 * 60 * 24 * max_age_days:
             count += 1
             if count < 15:
-                reportfragment.write(f'- {ticket}\n')
+                newtickets.append(ticket)
             else:
                 # For long time frames (such as for all-time stats) this list
                 # grows too big to be meaningful.
-                reportfragment.write(f'- ...\n')
+                newtickets.append('...')
                 break
 
+    # Add an initial space so that first JIRA ticket in enumeration will be
+    # detected by the JIRA link filter.
+    reportfragment.write(' ')
+    reportfragment.write(', '.join(newtickets))
     reportfragment.write('\n\n')
-
     return reportfragment
 
 
