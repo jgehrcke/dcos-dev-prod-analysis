@@ -1024,7 +1024,7 @@ def plot_latency(df):
         markersize=3,
         markeredgecolor='gray'
     )
-    plt.xlabel('Pull request creation time')
+    plt.xlabel('Pull request merge time')
     plt.ylabel('Time-to-merge latency [day], rolling window of 3 weeks width')
     set_title('Time-to-merge for PRs in both DC/OS repositories')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
