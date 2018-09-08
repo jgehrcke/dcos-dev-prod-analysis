@@ -1009,6 +1009,18 @@ def analyze_merged_prs(prs, report):
         figure_throughput_filepath,
         'Pull request integration throughput'
     )
+
+    report.write(textwrap.dedent(
+    """
+
+    ### Velocity
+
+    The greater the throughput the better, the smaller the latency the better.
+    Following this rationale the following plot shows the "velocity" defined
+    as throughput divided by latency.
+    """
+    ))
+
     include_figure(
         report,
         figure_quality_filepath,
@@ -1028,7 +1040,7 @@ def plot_quality(df):
     df['quality'].plot(color='red')
     plt.xlabel('Time')
     plt.ylabel('Throughput [1/day] / latency [day]')
-    set_title('PR integration velocity for PRs in both DC/OS repos')
+    # set_title('PR integration velocity for PRs in both DC/OS repos')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #     matcher.subtitle
     # set_subtitle('Raw data')
