@@ -985,7 +985,6 @@ def analyze_merged_prs(prs, report):
 
     When you read that plot ask yourself: does the time-to-merge appear to be in
     a tolerable regime? Do you see a trend?
-
     """
     ))
 
@@ -995,6 +994,15 @@ def analyze_merged_prs(prs, report):
         'Pull request integration latency (focus on mean)'
     )
 
+    report.write(textwrap.dedent(
+    """
+
+    ### Throughput
+
+    The following plot shows the number of PRs merged per day, averaged over a
+    rolling time window of three weeks width.
+    """
+    ))
 
     include_figure(
         report,
@@ -1024,7 +1032,9 @@ def plot_quality(df):
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #     matcher.subtitle
     # set_subtitle('Raw data')
-    plt.tight_layout(rect=(0, 0, 1, 0.95))
+    #plt.tight_layout(rect=(0, 0, 1, 0.95))
+
+    plt.tight_layout()
     return savefig('Pull request integration velocity')
 
 
@@ -1047,20 +1057,22 @@ def plot_throughput(filtered_prs):
     throughput = rollingwindow.count()/21.0
     # stddev = rollingwindow.std()
 
-    throughput.plot(
-        linestyle='dashdot',
-        # linestyle='None',
-        # marker='.',
+    ax = throughput.plot(
+        linestyle='solid',
         color='black',
-        markersize=5,
     )
+
     plt.xlabel('Time')
-    plt.ylabel('Throughput [1/day], rolling window of 3 weeks width')
-    set_title('Pull request throughput for PRs in both DC/OS repos')
-    # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
-    #     matcher.subtitle
-    # set_subtitle('Raw data')
-    plt.tight_layout(rect=(0, 0, 1, 0.95))
+    plt.ylabel('Throughput [1/day]')
+
+    ax.legend([
+        f'rolling window average (21 days)',
+        ],
+        numpoints=4
+    )
+
+    # plt.tight_layout(rect=(0, 0, 1, 95))
+    plt.tight_layout()
 
     return throughput, savefig('Pull request integration throughput')
 
