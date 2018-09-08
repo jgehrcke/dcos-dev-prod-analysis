@@ -816,7 +816,9 @@ def plot_override_comment_rate_two_windows(override_comments):
     plt.ylabel('Override command rate [1/day]')
     # set_title('Override command rate (from both DC/OS repositories)')
     # set_subtitle('Arithmetic mean over rolling time window')
-    plt.tight_layout(rect=(0, 0, 1, 0.95))
+    # plt.tight_layout(rect=(0, 0, 1, 0.95))
+
+    plt.tight_layout()
     return savefig('Override command rate')
 
 
@@ -850,7 +852,9 @@ def plot_override_comment_rate_multiple_jira_tickets(
     plt.ylabel('Override command rate [1/day]')
     # set_title('Override command rate for most frequently tagged JIRA tickets')
     # set_subtitle('Arithmetic mean over rolling time window')
-    plt.tight_layout(rect=(0, 0, 1, 0.95))
+    # plt.tight_layout(rect=(0, 0, 1, 0.95))
+
+    plt.tight_layout()
     return savefig('Override command rate for top JIRA tickets')
 
 
@@ -1078,7 +1082,7 @@ def plot_latency(df):
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #    matcher.subtitle
     #set_subtitle('Raw data')
-    plt.tight_layout(rect=(0, 0, 1, 0.95))
+    #plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     rollingwindow = df['opendays'].rolling('21d')
     mean = rollingwindow.mean()
@@ -1100,6 +1104,7 @@ def plot_latency(df):
         numpoints=4
     )
 
+    plt.tight_layout()
     return mean, savefig('Pull request integration latency')
 
 
@@ -1128,7 +1133,7 @@ def plot_latency_focus_on_mean(df):
 
     plt.xlabel('Pull request merge time')
     plt.ylabel('Time-to-merge latency [days]')
-    plt.tight_layout(rect=(0, 0, 1, 0.95))
+    # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     ax.legend([
         f'rolling window mean (21 days)',
@@ -1138,6 +1143,7 @@ def plot_latency_focus_on_mean(df):
         loc='upper left'
     )
 
+    plt.tight_layout()
     return savefig('Pull request integration latency focus on mean')
 
 
