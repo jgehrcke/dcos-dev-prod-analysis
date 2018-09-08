@@ -1016,7 +1016,7 @@ def plot_throughput(filtered_prs):
 
 def plot_latency(df):
 
-    df['opendays'].plot(
+    ax = df['opendays'].plot(
         # linestyle='dashdot',
         linestyle='None',
         color='gray',
@@ -1025,11 +1025,11 @@ def plot_latency(df):
         markeredgecolor='gray'
     )
     plt.xlabel('Pull request merge time')
-    plt.ylabel('Time-to-merge latency [day], rolling window of 3 weeks width')
-    set_title('Time-to-merge for PRs in both DC/OS repositories')
+    plt.ylabel('Time-to-merge latency [days]')
+    #set_title('Time-to-merge for PRs in both DC/OS repositories')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #    matcher.subtitle
-    set_subtitle('Raw data')
+    #set_subtitle('Raw data')
     plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     rollingwindow = df['opendays'].rolling('21d')
@@ -1042,6 +1042,14 @@ def plot_latency(df):
         # marker='.',
         # markersize=1,
         # markeredgecolor='gray'
+        ax=ax
+    )
+
+    ax.legend([
+        f'individual PRs',
+        f'rolling window average (21 days)',
+        ],
+        numpoints=4
     )
 
     # stddev = rollingwindow.std()
