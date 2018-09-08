@@ -929,15 +929,15 @@ def analyze_merged_prs(prs, report):
     latency, figure_latency_filepath = plot_latency(df)
 
     plt.figure()
-
     throughput, figure_throughput_filepath = plot_throughput(filtered_prs)
 
     plt.figure()
-
     quality = throughput / latency
     df['quality'] = quality
-
     figure_quality_filepath = plot_quality(df)
+
+    plt.figure()
+    figure_latency_focus_on_mean = plot_latency_focus_on_mean(df)
 
     report.write(textwrap.dedent(
     """
@@ -958,6 +958,7 @@ def analyze_merged_prs(prs, report):
     get merged. Each gray dot represents a single PR (or PR pair). The black
     line shows the arithmetic mean averaged over a rolling time window of three
     weeks width.
+
     """
     ))
 
@@ -966,6 +967,32 @@ def analyze_merged_prs(prs, report):
         figure_latency_filepath,
         'Pull request integration latency'
     )
+
+    report.write(textwrap.dedent(
+    """
+    The plot just shown is dominated by outliers; extreme cases where the
+    time-to-merge is very large. Outliers will always exist and that is fine.
+    Conceptually, we should focus on what the black line shows (average
+    time-to-merge over a rolling time window of reasonable width), and we should
+    also look at the overall degree of scattering which is what the standard
+    deviation of the data nicely covers. Therefore, the following plot, instead
+    of showing the raw data, focuses on the same black line as shown in the plot
+    above and additionally visualizes the standard deviation of the data (built
+    for the same rolling time window).
+
+    When you read that plot ask yourself: does the time-to-merge appear to be in
+    a tolerable regime? Do you see a trend?
+
+    """
+    ))
+
+    include_figure(
+        report,
+        figure_latency_focus_on_mean,
+        'Pull request integration latency (focus on mean)'
+    )
+
+
     include_figure(
         report,
         figure_throughput_filepath,
@@ -1073,19 +1100,45 @@ def plot_latency(df):
         numpoints=4
     )
 
-    # stddev = rollingwindow.std()
+    return mean, savefig('Pull request integration latency')
 
-    # plt.figure()
 
-    # Rolling window of one week width,
+def plot_latency_focus_on_mean(df):
 
-    # rollingwindow = df['opendays'].rolling('7d')
-    # mean = rollingwindow.mean()
-    # stddev = rollingwindow.std()
+    rollingwindow = df['opendays'].rolling('21d')
+    mean = rollingwindow.mean()
+    ax = mean.plot(
+        linestyle='solid',
+        color='black',
+    )
 
-    # mean.plot()
+    stddev = rollingwindow.std()
+    upperbond = mean + stddev
+    lowerbond = mean - stddev
 
-    return mean, savefig('Pull request intgration latency')
+    ax.fill_between(
+        mean.index,
+        lowerbond,
+        upperbond,
+        facecolor='gray',
+        alpha=0.3
+    )
+
+    plt.ylim((-5, mean.max() + 0.2 * mean.max()))
+
+    plt.xlabel('Pull request merge time')
+    plt.ylabel('Time-to-merge latency [days]')
+    plt.tight_layout(rect=(0, 0, 1, 0.95))
+
+    ax.legend([
+        f'rolling window mean (21 days)',
+        f'rolling window std dev (21 says)',
+        ],
+        numpoints=4,
+        loc='upper left'
+    )
+
+    return savefig('Pull request integration latency focus on mean')
 
 
 def set_title(text):
