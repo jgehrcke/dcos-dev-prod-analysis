@@ -1073,7 +1073,7 @@ def plot_latency(df):
         linestyle='None',
         color='gray',
         marker='.',
-        markersize=3,
+        markersize=4,
         markeredgecolor='gray'
     )
     plt.xlabel('Pull request merge time')
