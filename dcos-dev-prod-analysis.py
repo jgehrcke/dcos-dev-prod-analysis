@@ -939,7 +939,28 @@ def analyze_merged_prs(prs, report):
 
     figure_quality_filepath = plot_quality(df)
 
-    report.write('\n\n## Pull request integration velocity\n\n')
+    report.write(textwrap.dedent(
+    """
+
+    ## Pull request (PR) integration velocity
+
+    This analysis considers merged DC/OS pull requests across the two DC/OS
+    repositories ("upstream" and "downstream"). For making the analysis
+    represent how individual developers perceive the process, Mergebot-created
+    pull requests and manually created merge train pull requests are not
+    considered. Consequently, pull request pairs (comprised of an upstream PR
+    plus its corresponding Mergebot-managed downstream PR) are counted as a
+    single pull request.
+
+    ### Time-to-merge for individual DC/OS pull requests
+
+    The following plot shows the number of days it took for individual PRs to
+    get merged. Each gray dot represents a single PR (or PR pair). The black
+    line shows the arithmetic mean averaged over a rolling time window of three
+    weeks width.
+    """
+    ))
+
     include_figure(
         report,
         figure_latency_filepath,
