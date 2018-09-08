@@ -956,13 +956,12 @@ def analyze_merged_prs(prs, report):
     plus its corresponding Mergebot-managed downstream PR) are counted as a
     single pull request.
 
-    ### Time-to-merge for individual DC/OS pull requests
+    ### Time-to-merge
 
     The following plot shows the number of days it took for individual PRs to
-    get merged. Each gray dot represents a single PR (or PR pair). The black
-    line shows the arithmetic mean averaged over a rolling time window of three
-    weeks width.
-
+    get merged. Each dot represents a single PR (or PR pair). To make more sense
+    of the data the black line shows the arithmetic mean averaged over a rolling
+    time window of three weeks width.
     """
     ))
 
