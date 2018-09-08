@@ -276,9 +276,11 @@ def analyze_pr_comments(prs, report):
     {oldest_oc_created_at_text}.
 
 
-    #### Accumulated override command rate over time
+    #### Override command rate over time
 
-    In this plot all override commands are treated the same:
+    In this plot all override commands are considered (no distinction is made
+    based on the CI check name or JIRA ticket referred to in individual
+    commands):
     """
     ))
 
@@ -298,8 +300,8 @@ def analyze_pr_comments(prs, report):
 
     This plot shows the time evolution of the rate for override commands that
     refer to special JIRA tickets; those JIRA tickets that were referred to most
-    often in all override commands (the instabilities that they represent are
-    have been dominant pain points, and maybe still are, see for yourself):
+    often in all override commands (the instabilities that they represent have
+    been dominant time sinks and pain points, and maybe still are):
     """
     ))
     counter = Counter([oc['ticket'] for oc in all_override_comments])
@@ -460,7 +462,7 @@ def build_histograms_from_ocs(override_comments, reportfragment):
     topn = 10
     print(f'   Top {topn} JIRA tickets used in override comments')
     reportfragment.write(
-        f'\nTop {topn} JIRA tickets (do we work on the topmost? we should!):\n\n')
+        f'\nTop {topn} JIRA tickets (do we work on the top ones? we should!):\n\n')
 
     counter = Counter([oc['ticket'] for oc in override_comments])
     tabletext = get_mdtable(
@@ -804,8 +806,8 @@ def plot_override_comment_rate_two_windows(override_comments):
     # The legend story is shitty with pandas intertwined w/ mpl.
     # http://stackoverflow.com/a/30666612/145400
     ax.legend([
-        f'{window_width_days_1} d window',
-        f'{window_width_days_2} d window'
+        f'rolling window average ({window_width_days_1} days)',
+        f'rolling window average ({window_width_days_2} days)'
         ],
         numpoints=4
     )
