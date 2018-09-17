@@ -1078,7 +1078,7 @@ def plot_throughput(filtered_prs):
     plt.ylabel('Throughput [1/day]')
 
     ax.legend([
-        f'rolling window average (14 days)',
+        f'rolling window mean (14 days)',
         ],
         numpoints=4
     )
