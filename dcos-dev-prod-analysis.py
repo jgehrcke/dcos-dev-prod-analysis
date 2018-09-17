@@ -1109,20 +1109,27 @@ def plot_latency(df):
 
     rollingwindow = df['opendays'].rolling('14d')
     mean = rollingwindow.mean()
+    median = rollingwindow.median()
 
     mean.plot(
         linestyle='solid',
-        # linestyle='None',
         color='black',
-        # marker='.',
-        # markersize=1,
-        # markeredgecolor='gray'
+        linewidth=1.3,
+        ax=ax
+    )
+
+    median.plot(
+        linestyle='solid',
+        dash_capstyle='round',
+        color='#e05f4e',
+        linewidth=1.3,
         ax=ax
     )
 
     ax.legend([
         f'individual PRs',
-        f'rolling window average (14 days)',
+        f'rolling window mean (14 days)',
+        f'rolling window median (14 days)',
         ],
         numpoints=4
     )
