@@ -930,7 +930,7 @@ def analyze_merged_prs(prs, report):
 
     df['opendays'] = df['openseconds'] / 86400
 
-    latency_mean, \
+    latency_median, \
     figure_filepath_latency_raw_linscale, \
     figure_filepath_latency_raw_logscale = plot_latency(df)
 
@@ -938,7 +938,7 @@ def analyze_merged_prs(prs, report):
     throughput_mean, figure_throughput_filepath = plot_throughput(filtered_prs)
 
     plt.figure()
-    quality = throughput_mean / latency_mean
+    quality = throughput_mean / latency_median
     df['quality'] = quality
     figure_quality_filepath = plot_quality(df)
 
@@ -1151,22 +1151,22 @@ def _plot_latency_core(df):
         ],
         numpoints=4
     )
-    return mean, ax
+    return median, ax
 
 
 def plot_latency(df):
-    mean, ax = _plot_latency_core(df)
+    median, ax = _plot_latency_core(df)
     plt.tight_layout()
     figure_filepath_latency_raw_linscale = savefig(
         'Pull request integration latency (linear scale)')
 
-    mean, ax = _plot_latency_core(df)
+    median, ax = _plot_latency_core(df)
     ax.set_yscale('log')
     plt.tight_layout()
     figure_filepath_latency_raw_logscale = savefig(
         'Pull request integration latency (logarithmic scale)')
 
-    return mean, figure_filepath_latency_raw_linscale, figure_filepath_latency_raw_logscale
+    return median, figure_filepath_latency_raw_linscale, figure_filepath_latency_raw_logscale
 
 
 def plot_latency_focus_on_mean(df):
