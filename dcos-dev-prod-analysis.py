@@ -659,7 +659,7 @@ def detect_override_comment(comment, pr):
             )
             return None
 
-        if not re.search('[A-Z_]+-[0-9]+', ticket):
+        if not re.match('^[A-Z_]+-[0-9]+$', ticket):
             log.info('Invalid override command: ticket does not match regex: %s', ticket)
             return None
 
