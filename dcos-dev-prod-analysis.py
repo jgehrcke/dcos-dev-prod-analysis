@@ -1138,6 +1138,15 @@ def plot_latency_focus_on_mean(df):
     ax = mean.plot(
         linestyle='solid',
         color='black',
+        linewidth=1.3,
+    )
+
+    median = rollingwindow.median()
+
+    ax = median.plot(
+        linestyle='solid',
+        color='#e05f4e',
+        linewidth=1.5,
     )
 
     stddev = rollingwindow.std()
@@ -1160,6 +1169,7 @@ def plot_latency_focus_on_mean(df):
 
     ax.legend([
         f'rolling window mean (14 days)',
+        f'rolling window median (14 days)',
         f'rolling window std dev (14 says)',
         ],
         numpoints=4,
