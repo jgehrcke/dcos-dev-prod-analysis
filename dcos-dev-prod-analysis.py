@@ -930,13 +930,15 @@ def analyze_merged_prs(prs, report):
 
     df['opendays'] = df['openseconds'] / 86400
 
-    latency, figure_latency_filepath = plot_latency(df)
+    latency_mean, \
+    figure_filepath_latency_raw_linscale, \
+    figure_filepath_latency_raw_logscale = plot_latency(df)
 
     plt.figure()
-    throughput, figure_throughput_filepath = plot_throughput(filtered_prs)
+    throughput_mean, figure_throughput_filepath = plot_throughput(filtered_prs)
 
     plt.figure()
-    quality = throughput / latency
+    quality = throughput_mean / latency_mean
     df['quality'] = quality
     figure_quality_filepath = plot_quality(df)
 
@@ -959,32 +961,49 @@ def analyze_merged_prs(prs, report):
     ### Time-to-merge
 
     The following plot shows the number of days it took for individual PRs to
-    get merged. Each dot represents a single PR (or PR pair). To make more sense
-    of the data the black line shows the arithmetic mean averaged over a rolling
-    time window of two weeks width.
+    get merged. Each dot represents a single merged PR (or PR pair). The black
+    and orange lines shows the arithmetic mean and the median, correspondingly,
+    averaged over a rolling time window of two weeks (14 days) width.
     """
     ))
 
     include_figure(
         report,
-        figure_latency_filepath,
+        figure_filepath_latency_raw_linscale,
         'Pull request integration latency'
     )
 
     report.write(textwrap.dedent(
     """
-    The plot just shown is dominated by outliers; extreme cases where the
-    time-to-merge is very large. Outliers will always exist and that is fine.
-    Conceptually, we should focus on what the black line shows (average
-    time-to-merge over a rolling time window of reasonable width), and we should
-    also look at the overall degree of scattering which is what the standard
-    deviation of the data nicely covers. Therefore, the following plot, instead
-    of showing the raw data, focuses on the same black line as shown in the plot
-    above and additionally visualizes the standard deviation of the data (built
-    for the same rolling time window).
 
-    When you read that plot ask yourself: does the time-to-merge appear to be in
-    a tolerable regime? Do you see a trend?
+    Before interpreting mean/median it is important to get a feeling for the
+    distribution for the raw data by looking at the same graph as above but with
+    a logarithmic scale instead:
+    """
+    ))
+
+    include_figure(
+        report,
+        figure_filepath_latency_raw_logscale,
+        'Pull request integration latency (logarithmic scale)'
+    )
+
+    report.write(textwrap.dedent(
+    """
+    Neither the mean nor the median represent the raw data really well. The data
+    are clustered. A lot can be understood by looking at the distribution of the
+    raw data above. For example, it is an important observation that the
+    time-to-merge is usually distributed across four orders of magnitude.
+
+    For simplicity, further below the analysis uses the time evolution of the
+    median of the time-to-merge. The following plot, instead of showing the raw
+    data, focuses on showing the mean and median and -- to quantify the overall
+    degree of scattering -- additionally visualizes the standard deviation of
+    the data (built for the same rolling time window).
+
+    When you read these time-to-merge plots ask yourself: does the time-to-merge
+    appear to be in a tolerable regime? Do you see a trend? Does the raw data
+    appear to be clustered? How do the clusters evolve?
     """
     ))
 
@@ -1089,8 +1108,7 @@ def plot_throughput(filtered_prs):
     return throughput, savefig('Pull request integration throughput')
 
 
-def plot_latency(df):
-
+def _plot_latency_core(df):
     ax = df['opendays'].plot(
         # linestyle='dashdot',
         linestyle='None',
@@ -1133,9 +1151,22 @@ def plot_latency(df):
         ],
         numpoints=4
     )
+    return mean, ax
 
+
+def plot_latency(df):
+    mean, ax = _plot_latency_core(df)
     plt.tight_layout()
-    return mean, savefig('Pull request integration latency')
+    figure_filepath_latency_raw_linscale = savefig(
+        'Pull request integration latency (linear scale)')
+
+    mean, ax = _plot_latency_core(df)
+    ax.set_yscale('log')
+    plt.tight_layout()
+    figure_filepath_latency_raw_logscale = savefig(
+        'Pull request integration latency (logarithmic scale)')
+
+    return mean, figure_filepath_latency_raw_linscale, figure_filepath_latency_raw_logscale
 
 
 def plot_latency_focus_on_mean(df):
