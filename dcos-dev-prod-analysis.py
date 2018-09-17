@@ -687,9 +687,9 @@ def detect_override_comment(comment, pr):
 
 def calc_override_comment_rate(override_comments):
 
-    # Rolling window of one week width. The column does not matter, only
-    # evaluate number of events (rows) in the rolling window, and count them,
-    # then normalize.
+    # Rolling window of N days width. The column does not matter, only evaluate
+    # number of events (rows) in the rolling window, and count them, then
+    # normalize.
 
     df_raw = pd.DataFrame(
         {'foo': [1 for c in override_comments]},
@@ -961,7 +961,7 @@ def analyze_merged_prs(prs, report):
     The following plot shows the number of days it took for individual PRs to
     get merged. Each dot represents a single PR (or PR pair). To make more sense
     of the data the black line shows the arithmetic mean averaged over a rolling
-    time window of three weeks width.
+    time window of two weeks width.
     """
     ))
 
@@ -1000,7 +1000,7 @@ def analyze_merged_prs(prs, report):
     ### Throughput
 
     The following plot shows the number of PRs merged per day, averaged over a
-    rolling time window of three weeks width.
+    rolling time window of two weeks width.
     """
     ))
 
@@ -1052,8 +1052,8 @@ def plot_quality(df):
 
 def plot_throughput(filtered_prs):
 
-    # Rolling window of one week width. The column does not matter, only
-    # evaluate number of events (rows) in the rolling window, and count them.
+    # Rolling window of N days width. The column does not matter, only evaluate
+    # number of events (rows) in the rolling window, and count them.
 
     df = pd.DataFrame(
         {
@@ -1065,8 +1065,8 @@ def plot_throughput(filtered_prs):
     # Sort by time (when the PRs have been merged).
     df.sort_index(inplace=True)
 
-    rollingwindow = df['foo'].rolling('21d')
-    throughput = rollingwindow.count()/21.0
+    rollingwindow = df['foo'].rolling('14d')
+    throughput = rollingwindow.count()/14.0
     # stddev = rollingwindow.std()
 
     ax = throughput.plot(
@@ -1078,7 +1078,7 @@ def plot_throughput(filtered_prs):
     plt.ylabel('Throughput [1/day]')
 
     ax.legend([
-        f'rolling window average (21 days)',
+        f'rolling window average (14 days)',
         ],
         numpoints=4
     )
@@ -1107,7 +1107,7 @@ def plot_latency(df):
     #set_subtitle('Raw data')
     #plt.tight_layout(rect=(0, 0, 1, 0.95))
 
-    rollingwindow = df['opendays'].rolling('21d')
+    rollingwindow = df['opendays'].rolling('14d')
     mean = rollingwindow.mean()
 
     mean.plot(
@@ -1122,7 +1122,7 @@ def plot_latency(df):
 
     ax.legend([
         f'individual PRs',
-        f'rolling window average (21 days)',
+        f'rolling window average (14 days)',
         ],
         numpoints=4
     )
@@ -1133,7 +1133,7 @@ def plot_latency(df):
 
 def plot_latency_focus_on_mean(df):
 
-    rollingwindow = df['opendays'].rolling('21d')
+    rollingwindow = df['opendays'].rolling('14d')
     mean = rollingwindow.mean()
     ax = mean.plot(
         linestyle='solid',
@@ -1159,8 +1159,8 @@ def plot_latency_focus_on_mean(df):
     # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     ax.legend([
-        f'rolling window mean (21 days)',
-        f'rolling window std dev (21 says)',
+        f'rolling window mean (14 days)',
+        f'rolling window std dev (14 says)',
         ],
         numpoints=4,
         loc='upper left'
