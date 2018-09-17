@@ -958,7 +958,7 @@ def analyze_merged_prs(prs, report):
     plus its corresponding Mergebot-managed downstream PR) are counted as a
     single pull request.
 
-    ### Time-to-merge
+    ### Time-to-merge (TTM)
 
     The following plot shows the number of days it took for individual PRs to
     get merged. Each dot represents a single merged PR (or PR pair). The black
@@ -1058,7 +1058,7 @@ def include_figure(report, filepath, heading):
 def plot_quality(df):
     df['quality'].plot(color='red')
     plt.xlabel('Time')
-    plt.ylabel('Throughput [1/day] / latency [day]')
+    plt.ylabel('Throughput [1/day] / TTM [day]')
     # set_title('PR integration velocity for PRs in both DC/OS repos')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #     matcher.subtitle
@@ -1118,7 +1118,7 @@ def _plot_latency_core(df):
         markeredgecolor='gray'
     )
     plt.xlabel('Pull request merge time')
-    plt.ylabel('Time-to-merge latency [days]')
+    plt.ylabel('Time-to-merge (TTM) latency [days]')
     #set_title('Time-to-merge for PRs in both DC/OS repositories')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #    matcher.subtitle
