@@ -1029,22 +1029,22 @@ def analyze_merged_prs(prs, report):
         'Pull request integration throughput'
     )
 
-    report.write(textwrap.dedent(
-    """
+    # report.write(textwrap.dedent(
+    # """
 
-    ### Velocity
+    # ### Velocity
 
-    The greater the throughput the better, the smaller the latency the better.
-    Following this rationale the following plot shows the "velocity" defined
-    as throughput divided by latency.
-    """
-    ))
+    # The greater the throughput the better, the smaller the latency the better.
+    # Following this rationale the following plot shows the "velocity" defined
+    # as throughput divided by latency.
+    # """
+    # ))
 
-    include_figure(
-        report,
-        figure_quality_filepath,
-        'Pull request integration velocity'
-    )
+    # include_figure(
+    #     report,
+    #     figure_quality_filepath,
+    #     'Pull request integration velocity'
+    # )
 
 
 def include_figure(report, filepath, heading):
