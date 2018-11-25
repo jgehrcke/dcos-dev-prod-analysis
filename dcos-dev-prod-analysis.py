@@ -284,12 +284,19 @@ def analyze_pr_comments(prs, report):
     """
     ))
 
+
+    all_override_comments = [oc for oc in all_override_comments if oc['ticket'] == 'DCOS_OSS-2115']
+
     figure_file_abspath = plot_override_comment_rate_two_windows(all_override_comments)
     include_figure(
         report,
         figure_file_abspath,
         'Override comment rate plotted over time'
     )
+
+    plt.show()
+    import sys
+    sys.exit()
 
     report.write(textwrap.dedent(
     """
@@ -306,6 +313,8 @@ def analyze_pr_comments(prs, report):
     ))
     counter = Counter([oc['ticket'] for oc in all_override_comments])
     top_ticketnames = [ticketname for ticketname, count in counter.most_common(10)]
+
+    top_ticketnames = ['DCOS_OSS-2115']
     figure_file_abspath = plot_override_comment_rate_multiple_jira_tickets(
         all_override_comments, top_ticketnames)
 
@@ -685,22 +694,48 @@ def detect_override_comment(comment, pr):
     return None
 
 
-def calc_override_comment_rate(override_comments):
+def calc_override_comment_rate(
+        override_comments, window_width_days_1=7, window_width_days_2=14):
 
     # Rolling window of N days width. The column does not matter, only evaluate
     # number of events (rows) in the rolling window, and count them, then
     # normalize.
 
+    # pygithub returns naive datetime objects, but we know that the
+    # corresponding timezone is UTC. The `columncount` column's name will only
+    # be really important / meaningful after resampling below with the
+    # subsequent `count()` aggregation.
     df_raw = pd.DataFrame(
-        {'foo': [1 for c in override_comments]},
-        index=[pd.Timestamp(c['comment_obj'].created_at) for c in override_comments]
+        {'commentcount': [1 for c in override_comments]},
+        index=[
+            pd.Timestamp(c['comment_obj'].created_at, tz='UTC') for \
+                c in override_comments
+        ]
     )
 
     # Sort by time (comment creation time).
     df_raw.sort_index(inplace=True)
 
+    # Example head, tail
+    #                            commentcount
+    # 2017-11-23 01:07:39+00:00             1
+    # 2017-11-23 01:10:34+00:00             1
+    # 2017-11-23 01:57:27+00:00             1
+    # 2017-11-23 02:11:21+00:00             1
+    # 2017-11-27 17:07:51+00:00             1
+    # [...]
+    # 2018-11-23 09:22:01+00:00             1
+    # 2018-11-23 15:08:51+00:00             1
+    # 2018-11-23 15:26:34+00:00             1
+    # 2018-11-23 16:41:16+00:00             1
+    # 2018-11-23 16:41:25+00:00             1
+
+    # print('\n\n---before----')
+    # print(df_raw.head())
+    # print(df_raw.tail())
+
     # Resample so that there is one data point per hour (this downsamples
-    # sometime when multiple commands were issued within the same hour, and
+    # sometimes when multiple commands were issued within the same hour, and
     # upsamples during other times, such as night time and holiday time). Count
     # number of values within each bucket (the number of override commands per
     # hour). For those hours where there is no data point at all `count()`
@@ -709,34 +744,73 @@ def calc_override_comment_rate(override_comments):
     # 12:00:00`. Otherwise there would be a systematic time shift in the data
     # after resampling.
     df_resampled = df_raw.resample('1H').count()
-    # Note(JP): if this a resolution of 1 hour is ever a performance problem
+
+    # This is how the example from above looks now.
+    #                            commentcount
+    # 2017-11-23 01:00:00+00:00             3
+    # 2017-11-23 02:00:00+00:00             1
+    # 2017-11-23 03:00:00+00:00             0
+    # 2017-11-23 04:00:00+00:00             0
+    # 2017-11-23 05:00:00+00:00             0
+    # [...]
+    # 2018-11-23 12:00:00+00:00             0
+    # 2018-11-23 13:00:00+00:00             0
+    # 2018-11-23 14:00:00+00:00             0
+    # 2018-11-23 15:00:00+00:00             2
+    # 2018-11-23 16:00:00+00:00             2
+
+    # print('\n\n---after resample---')
+    # print(df_resampled.head())
+    # print(df_resampled.tail())
+
+    # Make it so that the time series contains data until today, well, now,
+    # showing zeros as a value. For getting there first add a data point with a
+    # timestamp from today, with the value 0. Then perform another resample
+    # operation with the same interval as before, and fill NaN values with
+    # zeros.
+    df_resampled.loc[pd.Timestamp.utcnow()] = [0]
+
+    # Example with added timestamp, tail:
+    #                                   commentcount
+    # ...
+    # 2018-11-23 13:00:00+00:00                    0
+    # 2018-11-23 14:00:00+00:00                    0
+    # 2018-11-23 15:00:00+00:00                    2
+    # 2018-11-23 16:00:00+00:00                    2
+    # 2018-11-24 11:53:31.995233+00:00             0
+
+
+    #print('\n\n---after resample with added timestamp---')
+    #print(df_resampled.head())
+    #print(df_resampled.tail())
+
+    df_resampled = df_resampled.resample('1H').asfreq().fillna(0)
+    # print('\n\n---another resample---')
+    # print(df_resampled.head())
+    # print(df_resampled.tail())
+
+    # This is how the example looks like now.
+    #                            commentcount
+    # 2017-11-23 01:00:00+00:00           3.0
+    # 2017-11-23 02:00:00+00:00           1.0
+    # 2017-11-23 03:00:00+00:00           0.0
+    # 2017-11-23 04:00:00+00:00           0.0
+    # 2017-11-23 05:00:00+00:00           0.0
+    # [...]
+    # 2018-11-24 07:00:00+00:00           0.0
+    # 2018-11-24 08:00:00+00:00           0.0
+    # 2018-11-24 09:00:00+00:00           0.0
+    # 2018-11-24 10:00:00+00:00           0.0
+    # 2018-11-24 11:00:00+00:00           0.0
+
+    # Note(JP): if a resolution of 1 hour is ever a performance problem
     # then decrease resolution to one day:
     # df_resampled = df_raw.resample('1D', loffset='12H').count()
-
-    # Example for how the dataframe can look like here:
-    #
-    # After resample().count() on df:
-    #             foo
-    # 2017-12-17    3
-    # 2017-12-18    6
-    # 2017-12-19   26
-    # 2017-12-20   15
-    # 2017-12-21   10
-    # 2017-12-22    4
-    # 2017-12-23    0
-    # 2017-12-24    0
-    # 2017-12-25    0
-    # 2017-12-26    2
-    # 2017-12-27    0
-    # 2017-12-28    4
-    # 2017-12-29    0
-    # 2017-12-30    0
 
     # Apply rolling time window analysis, and `sum()` the values within a window
     # because as of here the value per data points represents the number of
     # override commands issued per day.
-    window_width_days_1 = 3
-    rollingwindow_1 = df_resampled['foo'].rolling(
+    rollingwindow_1 = df_resampled['commentcount'].rolling(
         window='%sD' % window_width_days_1,
         min_periods=0
     )
@@ -770,8 +844,7 @@ def calc_override_comment_rate(override_comments):
     commentrate_1 = commentrate_1[window_width_days_1:]
 
     # Same thing for a more wide rolling window.
-    window_width_days_2 = 14
-    rollingwindow_2 = df_resampled['foo'].rolling(
+    rollingwindow_2 = df_resampled['commentcount'].rolling(
         window='%sD' % window_width_days_2,
         min_periods=0
     )
@@ -782,6 +855,9 @@ def calc_override_comment_rate(override_comments):
     offset_seconds = - int(window_width_days_2 * 24 * 60 * 60 / 2.0) + 1
     commentrate_2 = commentrate_2.shift(offset_seconds, freq='s')
     commentrate_2 = commentrate_2[window_width_days_2:]
+
+    commentrate_1 = commentrate_1['2018-08-01':]
+    commentrate_2 = commentrate_2['2018-08-01':]
 
     return commentrate_1, window_width_days_1, commentrate_2, window_width_days_2, df_raw, df_resampled
 
@@ -814,9 +890,9 @@ def plot_override_comment_rate_two_windows(override_comments):
 
     plt.xlabel('Time')
     plt.ylabel('Override command rate [1/day]')
-    # set_title('Override command rate (from both DC/OS repositories)')
+    #set_title('Override command rate for DCOS_OSS-2115 from both DC/OS repositories')
     # set_subtitle('Arithmetic mean over rolling time window')
-    # plt.tight_layout(rect=(0, 0, 1, 0.95))
+    #plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     plt.tight_layout()
     return savefig('Override command rate')
@@ -835,7 +911,7 @@ def plot_override_comment_rate_multiple_jira_tickets(
         commentrate_1, window_width_days_1, commentrate_2, window_width_days_2, _, _ = \
             calc_override_comment_rate(ocs)
 
-        commentrate_2.plot(
+        commentrate_1.plot(
             linestyle='solid',
             marker='None',
             markersize=4,
