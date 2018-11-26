@@ -306,6 +306,7 @@ def analyze_pr_comments(prs, report):
     ))
     counter = Counter([oc['ticket'] for oc in all_override_comments])
     top_ticketnames = [ticketname for ticketname, count in counter.most_common(10)]
+
     figure_file_abspath = plot_override_comment_rate_multiple_jira_tickets(
         all_override_comments, top_ticketnames)
 
@@ -691,9 +692,16 @@ def calc_override_comment_rate(override_comments):
     # number of events (rows) in the rolling window, and count them, then
     # normalize.
 
+    # pygithub returns naive datetime objects, but we know that the
+    # corresponding timezone is UTC. The `columncount` column's name will only
+    # be really important / meaningful after resampling below with the
+    # subsequent `count()` aggregation.
     df_raw = pd.DataFrame(
-        {'foo': [1 for c in override_comments]},
-        index=[pd.Timestamp(c['comment_obj'].created_at) for c in override_comments]
+        {'commentcount': [1 for c in override_comments]},
+        index=[
+            pd.Timestamp(c['comment_obj'].created_at, tz='UTC') for \
+                c in override_comments
+        ]
     )
 
     # Sort by time (comment creation time).
@@ -735,8 +743,8 @@ def calc_override_comment_rate(override_comments):
     # Apply rolling time window analysis, and `sum()` the values within a window
     # because as of here the value per data points represents the number of
     # override commands issued per day.
+    rollingwindow_1 = df_resampled['commentcount'].rolling(
     window_width_days_1 = 3
-    rollingwindow_1 = df_resampled['foo'].rolling(
         window='%sD' % window_width_days_1,
         min_periods=0
     )
@@ -770,8 +778,8 @@ def calc_override_comment_rate(override_comments):
     commentrate_1 = commentrate_1[window_width_days_1:]
 
     # Same thing for a more wide rolling window.
+    rollingwindow_2 = df_resampled['commentcount'].rolling(
     window_width_days_2 = 14
-    rollingwindow_2 = df_resampled['foo'].rolling(
         window='%sD' % window_width_days_2,
         min_periods=0
     )
