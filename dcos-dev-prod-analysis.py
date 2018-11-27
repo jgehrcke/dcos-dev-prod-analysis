@@ -672,6 +672,11 @@ def detect_override_comment(comment, pr):
             log.info('Invalid override command: ticket does not match regex: %s', ticket)
             return None
 
+        if ticket == 'DCOS-19542':
+            # Account for this very special ticket to have been renamed at
+            # some point.
+            ticket = 'DCOS_OSS-2115'
+
         checkname = match.group('checkname').strip()
         if len(checkname.split()) > 1:
             log.info('Invalid override command: whitespace in checkname: `%s`', checkname)
@@ -856,8 +861,8 @@ def calc_override_comment_rate(
     commentrate_2 = commentrate_2.shift(offset_seconds, freq='s')
     commentrate_2 = commentrate_2[window_width_days_2:]
 
-    commentrate_1 = commentrate_1['2018-08-01':]
-    commentrate_2 = commentrate_2['2018-08-01':]
+    #commentrate_1 = commentrate_1['2018-08-01':]
+    #commentrate_2 = commentrate_2['2018-08-01':]
 
     return commentrate_1, window_width_days_1, commentrate_2, window_width_days_2, df_raw, df_resampled
 
