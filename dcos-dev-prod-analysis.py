@@ -1097,14 +1097,16 @@ def analyze_merged_prs(prs, report):
             pr in filtered_prs],
         }
 
-    for metric in (
-            'time_pr_open_to_last_shipit',
-            'time_pr_open_to_last_rfr',
-            'time_last_shipit_to_pr_merge',
-            'time_last_rfr_to_pr_merge',
-            'time_last_rfr_to_last_shipit'
-            ):
-        df_dict[metric] = [
+    # All these metrics are time differences measured in seconds.
+    time_diff_metrics = (
+        'time_pr_open_to_last_shipit',
+        'time_pr_open_to_last_rfr',
+        'time_last_shipit_to_pr_merge',
+        'time_last_rfr_to_pr_merge',
+        'time_last_rfr_to_last_shipit'
+    )
+    for metric in time_diff_metrics:
+        df_dict[metric + '_seconds'] = [
             pr._label_transition_timings[metric].total_seconds()
             if pr._label_transition_timings[metric] is not None else np.NaN for
             pr in filtered_prs]
@@ -1116,6 +1118,15 @@ def analyze_merged_prs(prs, report):
         df_dict,
         index=[pd.Timestamp(pr.merged_at) for pr in filtered_prs]
         )
+    # Sort by time.
+    df.sort_index(inplace=True)
+
+    # Convert a number of time differences measured in seconds to days, for
+    # easier human consumption in plots.
+    df['opendays'] = df['openseconds'] / 86400
+
+    for metric in time_diff_metrics:
+        df[metric + '_days'] = df[metric + '_seconds'] / 86400
 
     log.info('Main Dataframe:')
     print(df)
