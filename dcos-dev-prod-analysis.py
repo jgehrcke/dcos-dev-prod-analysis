@@ -39,12 +39,14 @@ import subprocess
 import sys
 import textwrap
 
+from enum import Enum
 from io import StringIO
 from collections import Counter, defaultdict
 from datetime import datetime
 
 import pytablewriter
 import pandas as pd
+import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 
@@ -77,10 +79,10 @@ def main():
     args = parser.parse_args()
 
     prs_downstream = load_prs_from_file(
-        'dcos-enterprise_pull-requests-with-comments.pickle')
+        'dcos-enterprise_pull-requests-with-comments-events.pickle')
 
     prs_upstream = load_prs_from_file(
-        'dcos_pull-requests-with-comments.pickle')
+        'dcos_pull-requests-with-comments-events.pickle')
 
     if os.path.exists(args.output_directory):
         if not os.path.isdir(args.output_directory):
@@ -700,7 +702,7 @@ def calc_override_comment_rate(
     df_raw = pd.DataFrame(
         {'commentcount': [1 for c in override_comments]},
         index=[
-            pd.Timestamp(c['comment_obj'].created_at, tz='UTC') for \
+            pd.Timestamp(c['comment_obj'].created_at, tz='UTC') for
                 c in override_comments
         ]
     )
@@ -850,7 +852,7 @@ def plot_override_comment_rate_two_windows(override_comments):
         marker='None',
         color='black',
         ax=ax
-        )
+    )
 
     # The legend story is shitty with pandas intertwined w/ mpl.
     # http://stackoverflow.com/a/30666612/145400
@@ -924,6 +926,132 @@ def savefig(title):
     return os.path.basename(fpath_figure)
 
 
+class LabelType(Enum):
+    SHIP_IT = 1
+    READY_FOR_REVIEW = 2
+
+
+class PRLabel:
+    """
+    Represent a pull request label. It has a type and a creation time. Use only
+    the label type when comparing with other PRLabel instances. This simplifies
+    analyses such as building a label transition histogram and finding a certain
+    label type in a list of labels.
+    """
+    __slots__ = 'created_at', 'type'
+
+    def __init__(self, created_at):
+        self.created_at = created_at
+
+    def __hash__(self):
+        return hash(self.type)
+
+    def __eq__(self, other):
+        return self.type is other.type
+
+    def __repr__(self):
+        """
+        Return the label type w/o the 'LabelType.' prefix.
+        """
+        return str(self.type)[10:]
+
+
+class ShipIt(PRLabel):
+    type = LabelType.SHIP_IT
+
+
+class ReadyForReview(PRLabel):
+    type = LabelType.READY_FOR_REVIEW
+
+
+def pr_analyze_label_transitions(pr):
+    """
+    Analyze evolution of labels set for this pull request.
+
+    Extract the following metrics:
+
+        - time from opening PR to last ship it label
+        - time from opening PR to last ready for review label
+        - time from last ship it label to merge
+        - time from last ready for review label to merge
+        - time from last ready for review label to last ship it label
+
+    Store these metrics on the `pr` object in a special attribute, a dictionary.
+
+    Return tuple of PR labels, in order, until merge. Examples:
+
+       (READY_FOR_REVIEW, SHIP_IT)
+    or (READY_FOR_REVIEW,)
+    or ()
+    or (SHIP_IT,)
+    or (READY_FOR_REVIEW, READY_FOR_REVIEW)
+    or (READY_FOR_REVIEW, SHIP_IT, READY_FOR_REVIEW, SHIP_IT)
+
+    This only considers SHIP IT and READY FOR REVIEW labels (effectively
+    ignored all other labels).
+    """
+
+    if not hasattr(pr, '_events'):
+        log.warning('PR object does not have _events property: %r', pr)
+        return ()
+
+    labels_in_order_until_merge = []
+
+    for event in pr._events:
+        if event.event == 'labeled':
+            # The deserialization into `event.label.name` seems to be buggy
+            # with pygithub 1.43, failing for a small number of events with
+            # an AttributeError, despite raw data being there. I filed
+            # https://github.com/PyGithub/PyGithub/issues/991
+            #
+            # Only account for label changes until merge.
+            if event.created_at < pr.merged_at:
+
+                if 'ship' in event._rawData['label']['name'].lower():
+                    labels_in_order_until_merge.append(
+                        ShipIt(event.created_at))
+
+                elif 'review' in event._rawData['label']['name'].lower():
+                    labels_in_order_until_merge.append(
+                        ReadyForReview(event.created_at))
+
+    # Do not rely on labels to already be in chronological order. Default is to
+    # sort in ascending order, with events that happened later in time appearing
+    # later in the list.
+    labels_in_order_until_merge.sort(key=lambda x: x.created_at)
+
+    # Prepare a dictionary for collecting various time metrics of this pull
+    # request. Prepopulate the values with `None` because not all metrics can
+    # be found for all pull requests.
+    ts = {
+        'time_pr_open_to_last_shipit': None,
+        'time_pr_open_to_last_rfr': None,
+        'time_last_shipit_to_pr_merge': None,
+        'time_last_rfr_to_pr_merge': None,
+        'time_last_rfr_to_last_shipit': None
+    }
+
+    last_shipit_time = None
+
+    for label in reversed(labels_in_order_until_merge):
+
+        if label.type is LabelType.SHIP_IT:
+            ts['time_pr_open_to_last_shipit'] = label.created_at - pr.created_at
+            ts['time_last_shipit_to_pr_merge'] = pr.merged_at - label.created_at
+            last_shipit_time = label.created_at
+
+        if label.type is LabelType.READY_FOR_REVIEW:
+            ts['time_pr_open_to_last_rfr'] = label.created_at - pr.created_at
+            ts['time_last_rfr_to_pr_merge'] = pr.merged_at - label.created_at
+            if last_shipit_time:
+                ts['time_last_rfr_to_last_shipit'] = last_shipit_time - label.created_at
+
+    # Modify PR in place.
+    pr._label_transition_timings = ts
+
+    return tuple(labels_in_order_until_merge)
+
+
 def analyze_merged_prs(prs, report):
 
     log.info('Filter merged pull requests.')
@@ -936,7 +1064,7 @@ def analyze_merged_prs(prs, report):
 
     # Proceed with analyzing only those pull requests that were not created by
     # mergebot. This ignores an important class of pull request: all downstream
-    # PRs created via the bump-ee command. This is an intentional, following the
+    # PRs created via the bump-ee command. This is intentional, following the
     # idea that a pull request pair comprised of an upstream PR with the
     # corresponding downstream PR is tracking one unit of change to DC/OS.
     log.info('Filter pull requests not created by mergebot.')
@@ -947,41 +1075,69 @@ def analyze_merged_prs(prs, report):
     filtered_prs = [pr for pr in filtered_prs if 'train' not in pr.title.lower()]
     log.info('Number of filtered pull requests: %s', len(filtered_prs))
 
-    # Major goal is to look at train
-    # PRs separately, and to filter PRs by certain criteria in general, such as
+    # Future goal is to distinguish PR types, to look at train PRs separately,
+    # and to filter PRs by certain criteria in general, such as
     # - how many lines do they change
     # - are these just simple package bumps?
     # - ...
+
+    log.info('Analyze label transitions in filtered PRs')
+    label_transitions = [pr_analyze_label_transitions(pr) for pr in filtered_prs]
+
+    log.info('Pull request label transition histogram, top 50')
+    counter = Counter(label_transitions)
+    for transition, count in counter.most_common(50):
+        print('{:>8}: {}'.format(count, transition))
+
+    log.info('Build main Dataframe')
+    df_dict = {
+        'created_at': [pr.created_at for pr in filtered_prs],
+        'openseconds': [
+            (pr.merged_at - pr.created_at).total_seconds() for
+            pr in filtered_prs],
+        }
+
+    # All these metrics are time differences measured in seconds.
+    time_diff_metrics = (
+        'time_pr_open_to_last_shipit',
+        'time_pr_open_to_last_rfr',
+        'time_last_shipit_to_pr_merge',
+        'time_last_rfr_to_pr_merge',
+        'time_last_rfr_to_last_shipit'
+    )
+    for metric in time_diff_metrics:
+        df_dict[metric + '_seconds'] = [
+            pr._label_transition_timings[metric].total_seconds()
+            if pr._label_transition_timings[metric] is not None else np.NaN for
+            pr in filtered_prs]
+
+    # I think the point in time when a pull request has been merged is the
+    # better reference for determining metrics like throughput and latency than
+    # the point in time when a pull request has been created.
+    df = pd.DataFrame(
+        df_dict,
+        index=[pd.Timestamp(pr.merged_at) for pr in filtered_prs]
+        )
+    # Sort by time.
+    df.sort_index(inplace=True)
+
+    # Convert a number of time differences measured in seconds to days, for
+    # easier human consumption in plots.
+    df['opendays'] = df['openseconds'] / 86400
+
+    for metric in time_diff_metrics:
+        df[metric + '_days'] = df[metric + '_seconds'] / 86400
+
+    log.info('Main Dataframe:')
+    print(df)
 
     # This line assumes that somewhere in the code path a figure has been
     # created before, now create a fresh one.
     plt.figure()
 
-    log.info('Build main Dataframe')
-
-    # I think the point in time when a pull request has been merged is the
-    # better reference for determining metrics like throughput and latency than
-    # the point in time when a pull request has been created.
-
-    df = pd.DataFrame(
-        {
-            'created_at': [pr.created_at for pr in filtered_prs],
-            'openseconds': [
-                (pr.merged_at - pr.created_at).total_seconds() for
-                pr in filtered_prs
-            ]
-        },
-        index=[pd.Timestamp(pr.merged_at) for pr in filtered_prs]
-        )
-
-    # Sort by time.
-    df.sort_index(inplace=True)
-
-    df['opendays'] = df['openseconds'] / 86400
-
     latency_median, \
     figure_filepath_latency_raw_linscale, \
-    figure_filepath_latency_raw_logscale = plot_latency(df)
+    figure_filepath_latency_raw_logscale = plot_latency(df, 'opendays')
 
     plt.figure()
     throughput_mean, figure_throughput_filepath = plot_throughput(filtered_prs)
@@ -992,7 +1148,21 @@ def analyze_merged_prs(prs, report):
     figure_quality_filepath = plot_quality(df)
 
     plt.figure()
-    figure_latency_focus_on_mean = plot_latency_focus_on_mean(df)
+    figure_latency_focus_on_mean = plot_latency_focus_on_mean(df, 'opendays')
+
+    # Create plots with a different TTM metric, the time difference
+    # between the last ship it label and the PR merge. This applies to
+    # significantly less pull requests, especially in the more distant past.
+    plt.figure()
+    figure_filepath_ttm_shipit_to_merge_focus_on_mean = \
+        plot_latency_focus_on_mean(df, 'time_last_shipit_to_pr_merge_days')
+
+    plt.figure()
+    _, \
+    figure_filepath_ttm_shipit_to_merge_raw_linscale, \
+    figure_filepath_ttm_shipit_to_merge_raw_logscale = plot_latency(
+        df, 'time_last_shipit_to_pr_merge_days')
+
 
     report.write(textwrap.dedent(
     """
@@ -1008,6 +1178,8 @@ def analyze_merged_prs(prs, report):
     single pull request.
 
     ### Time-to-merge (TTM)
+
+    #### Time from opening the PR to merge.
 
     The following plot shows the number of days it took for individual PRs to
     get merged. Each dot represents a single merged PR (or PR pair). The black
@@ -1060,6 +1232,36 @@ def analyze_merged_prs(prs, report):
         report,
         figure_latency_focus_on_mean,
         'Pull request integration latency (focus on mean)'
+    )
+
+    report.write(textwrap.dedent(
+    """
+
+    #### Ship-it to merge
+
+    A subset of the merged pull requests went through a "proper" label life
+    cycle which requires a "ship it" label being set on the pull request before
+    merging. For PRs which fulfill this criterion the following plot shows the
+    time difference between the last applied ship it label and the merge time.
+    """
+    ))
+
+    # include_figure(
+    #     report,
+    #     figure_filepath_ttm_shipit_to_merge_raw_linscale,
+    #     'Pull request TTM ship-it-to-merge (linear scale)'
+    # )
+
+    include_figure(
+        report,
+        figure_filepath_ttm_shipit_to_merge_focus_on_mean,
+        'Pull request TTM ship-it-to-merge (focus on mean)'
+    )
+
+    include_figure(
+        report,
+        figure_filepath_ttm_shipit_to_merge_raw_logscale,
+        'Pull request TTM ship-it-to-merge (logarithmic scale)'
     )
 
     report.write(textwrap.dedent(
@@ -1157,8 +1359,8 @@ def plot_throughput(filtered_prs):
     return throughput, savefig('Pull request integration throughput')
 
 
-def _plot_latency_core(df):
-    ax = df['opendays'].plot(
+def _plot_latency_core(df, metricname):
+    ax = df[metricname].plot(
         # linestyle='dashdot',
         linestyle='None',
         color='gray',
@@ -1174,7 +1376,7 @@ def _plot_latency_core(df):
     #set_subtitle('Raw data')
     #plt.tight_layout(rect=(0, 0, 1, 0.95))
 
-    rollingwindow = df['opendays'].rolling('14d')
+    rollingwindow = df[metricname].rolling('14d')
     mean = rollingwindow.mean()
     median = rollingwindow.median()
 
@@ -1203,24 +1405,29 @@ def _plot_latency_core(df):
     return median, ax
 
 
-def plot_latency(df):
-    median, ax = _plot_latency_core(df)
+def plot_latency(df, metricname):
+
+    median, ax = _plot_latency_core(df, metricname)
     plt.tight_layout()
     figure_filepath_latency_raw_linscale = savefig(
-        'Pull request integration latency (linear scale)')
+        f'PR integration latency (linear scale), metric: {metricname}')
 
-    median, ax = _plot_latency_core(df)
+    median, ax = _plot_latency_core(df,  metricname)
     ax.set_yscale('log')
     plt.tight_layout()
     figure_filepath_latency_raw_logscale = savefig(
-        'Pull request integration latency (logarithmic scale)')
+        f'PR integration latency (logarithmic scale), metric:  {metricname}')
 
-    return median, figure_filepath_latency_raw_linscale, figure_filepath_latency_raw_logscale
+    return (
+        median,
+        figure_filepath_latency_raw_linscale,
+        figure_filepath_latency_raw_logscale
+    )
 
 
-def plot_latency_focus_on_mean(df):
+def plot_latency_focus_on_mean(df, metricname):
 
-    rollingwindow = df['opendays'].rolling('14d')
+    rollingwindow = df[metricname].rolling('14d')
     mean = rollingwindow.mean()
     ax = mean.plot(
         linestyle='solid',
@@ -1264,7 +1471,7 @@ def plot_latency_focus_on_mean(df):
     )
 
     plt.tight_layout()
-    return savefig('Pull request integration latency focus on mean')
+    return savefig(f'PR integration latency focus on mean, metric: {metricname}')
 
 
 def set_title(text):
