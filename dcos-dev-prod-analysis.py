@@ -1090,22 +1090,35 @@ def analyze_merged_prs(prs, report):
         print('{:>8}: {}'.format(count, transition))
 
     log.info('Build main Dataframe')
+    df_dict = {
+        'created_at': [pr.created_at for pr in filtered_prs],
+        'openseconds': [
+            (pr.merged_at - pr.created_at).total_seconds() for
+            pr in filtered_prs],
+        }
+
+    for metric in (
+            'time_pr_open_to_last_shipit',
+            'time_pr_open_to_last_rfr',
+            'time_last_shipit_to_pr_merge',
+            'time_last_rfr_to_pr_merge',
+            'time_last_rfr_to_last_shipit'
+            ):
+        df_dict[metric] = [
+            pr._label_transition_timings[metric].total_seconds()
+            if pr._label_transition_timings[metric] is not None else np.NaN for
+            pr in filtered_prs]
 
     # I think the point in time when a pull request has been merged is the
     # better reference for determining metrics like throughput and latency than
     # the point in time when a pull request has been created.
-
     df = pd.DataFrame(
-        {
-            'created_at': [pr.created_at for pr in filtered_prs],
-            'openseconds': [
-                (pr.merged_at - pr.created_at).total_seconds() for
-                pr in filtered_prs
-            ]
-        },
+        df_dict,
         index=[pd.Timestamp(pr.merged_at) for pr in filtered_prs]
         )
 
+    log.info('Main Dataframe:')
+    print(df)
     # Sort by time.
     df.sort_index(inplace=True)
 
