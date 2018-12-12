@@ -1131,18 +1131,13 @@ def analyze_merged_prs(prs, report):
     log.info('Main Dataframe:')
     print(df)
 
-    # Sort by time.
-    df.sort_index(inplace=True)
-
     # This line assumes that somewhere in the code path a figure has been
     # created before, now create a fresh one.
     plt.figure()
 
-    df['opendays'] = df['openseconds'] / 86400
-
     latency_median, \
     figure_filepath_latency_raw_linscale, \
-    figure_filepath_latency_raw_logscale = plot_latency(df)
+    figure_filepath_latency_raw_logscale = plot_latency(df, 'opendays')
 
     plt.figure()
     throughput_mean, figure_throughput_filepath = plot_throughput(filtered_prs)
@@ -1153,7 +1148,21 @@ def analyze_merged_prs(prs, report):
     figure_quality_filepath = plot_quality(df)
 
     plt.figure()
-    figure_latency_focus_on_mean = plot_latency_focus_on_mean(df)
+    figure_latency_focus_on_mean = plot_latency_focus_on_mean(df, 'opendays')
+
+    # Create plots with a different TTM metric, the time difference
+    # between the last ship it label and the PR merge. This applies to
+    # significantly less pull requests, especially in the more distant past.
+    plt.figure()
+    figure_filepath_ttm_shipit_to_merge_focus_on_mean = \
+        plot_latency_focus_on_mean(df, 'time_last_shipit_to_pr_merge_days')
+
+    plt.figure()
+    _, \
+    figure_filepath_ttm_shipit_to_merge_raw_linscale, \
+    figure_filepath_ttm_shipit_to_merge_raw_logscale = plot_latency(
+        df, 'time_last_shipit_to_pr_merge_days')
+
 
     report.write(textwrap.dedent(
     """
@@ -1169,6 +1178,8 @@ def analyze_merged_prs(prs, report):
     single pull request.
 
     ### Time-to-merge (TTM)
+
+    #### Time from opening the PR to merge.
 
     The following plot shows the number of days it took for individual PRs to
     get merged. Each dot represents a single merged PR (or PR pair). The black
@@ -1221,6 +1232,36 @@ def analyze_merged_prs(prs, report):
         report,
         figure_latency_focus_on_mean,
         'Pull request integration latency (focus on mean)'
+    )
+
+    report.write(textwrap.dedent(
+    """
+
+    #### Ship-it to merge
+
+    A subset of the merged pull requests went through a "proper" label life
+    cycle which requires a "ship it" label being set on the pull request before
+    merging. For PRs which fulfill this criterion the following plot shows the
+    time difference between the last applied ship it label and the merge time.
+    """
+    ))
+
+    # include_figure(
+    #     report,
+    #     figure_filepath_ttm_shipit_to_merge_raw_linscale,
+    #     'Pull request TTM ship-it-to-merge (linear scale)'
+    # )
+
+    include_figure(
+        report,
+        figure_filepath_ttm_shipit_to_merge_focus_on_mean,
+        'Pull request TTM ship-it-to-merge (focus on mean)'
+    )
+
+    include_figure(
+        report,
+        figure_filepath_ttm_shipit_to_merge_raw_logscale,
+        'Pull request TTM ship-it-to-merge (logarithmic scale)'
     )
 
     report.write(textwrap.dedent(
