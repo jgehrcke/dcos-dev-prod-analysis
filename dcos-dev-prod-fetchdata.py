@@ -135,35 +135,35 @@ def fetch_details_for_all_prs(prs_current_without_details, reponame):
         log.info('Most recent PRs: %s', old_prs_to_analyze)
 
         log.info(
-            'Fetching comments for %s recent PRs',
+            'Fetching comments & events for %s recent PRs',
             len(old_prs_to_analyze)
         )
 
         for pr in old_prs_to_analyze:
-            prs_to_fetch_comments_for[pr.number] = pr
+            prs_to_fetch_details_for[pr.number] = pr
 
-        if not prs_to_fetch_comments_for:
+        if not prs_to_fetch_details_for:
             log.info('Nothing to fetch, data on disk is up-to-date')
             return prs_old_with_comments
 
     else:
-        prs_to_fetch_comments_for = prs_current_without_comments
+        prs_to_fetch_details_for = prs_current_without_details
         # Fetch comments for all pull requests.
 
         log.info(
-            'Fetching comments for %s PRs',
-            len(prs_to_fetch_comments_for)
+            'Fetching comments & events for %s PRs',
+            len(prs_to_fetch_details_for)
         )
 
-    fetch_pr_comments_in_threadpool(prs_to_fetch_comments_for)
+    fetch_pr_details_in_threadpool(prs_to_fetch_details_for)
 
     if prs_old_with_comments is not None:
         # Combine data loaded from disk, and fresh data from GitHub.
-        prs_old_with_comments.update(prs_to_fetch_comments_for)
+        prs_old_with_comments.update(prs_to_fetch_details_for)
         prs_with_comments = prs_old_with_comments
     else:
-        # There was no old data; `prs_to_fetch_comments_for` is sufficient.
-        prs_with_comments = prs_to_fetch_comments_for
+        # There was no old data; `prs_to_fetch_details_for` is sufficient.
+        prs_with_comments = prs_to_fetch_details_for
 
     persist_data(prs_with_comments, filepath)
     # log.info('fetch_comments_for_all_prs(): return %s', prs_with_comments)
