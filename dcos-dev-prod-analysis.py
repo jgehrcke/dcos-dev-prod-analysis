@@ -1307,8 +1307,8 @@ def plot_throughput(filtered_prs):
     return throughput, savefig('Pull request integration throughput')
 
 
-def _plot_latency_core(df):
-    ax = df['opendays'].plot(
+def _plot_latency_core(df, metricname):
+    ax = df[metricname].plot(
         # linestyle='dashdot',
         linestyle='None',
         color='gray',
@@ -1324,7 +1324,7 @@ def _plot_latency_core(df):
     #set_subtitle('Raw data')
     #plt.tight_layout(rect=(0, 0, 1, 0.95))
 
-    rollingwindow = df['opendays'].rolling('14d')
+    rollingwindow = df[metricname].rolling('14d')
     mean = rollingwindow.mean()
     median = rollingwindow.median()
 
@@ -1353,24 +1353,29 @@ def _plot_latency_core(df):
     return median, ax
 
 
-def plot_latency(df):
-    median, ax = _plot_latency_core(df)
+def plot_latency(df, metricname):
+
+    median, ax = _plot_latency_core(df, metricname)
     plt.tight_layout()
     figure_filepath_latency_raw_linscale = savefig(
-        'Pull request integration latency (linear scale)')
+        f'PR integration latency (linear scale), metric: {metricname}')
 
-    median, ax = _plot_latency_core(df)
+    median, ax = _plot_latency_core(df,  metricname)
     ax.set_yscale('log')
     plt.tight_layout()
     figure_filepath_latency_raw_logscale = savefig(
-        'Pull request integration latency (logarithmic scale)')
+        f'PR integration latency (logarithmic scale), metric:  {metricname}')
 
-    return median, figure_filepath_latency_raw_linscale, figure_filepath_latency_raw_logscale
+    return (
+        median,
+        figure_filepath_latency_raw_linscale,
+        figure_filepath_latency_raw_logscale
+    )
 
 
-def plot_latency_focus_on_mean(df):
+def plot_latency_focus_on_mean(df, metricname):
 
-    rollingwindow = df['opendays'].rolling('14d')
+    rollingwindow = df[metricname].rolling('14d')
     mean = rollingwindow.mean()
     ax = mean.plot(
         linestyle='solid',
@@ -1414,7 +1419,7 @@ def plot_latency_focus_on_mean(df):
     )
 
     plt.tight_layout()
-    return savefig('Pull request integration latency focus on mean')
+    return savefig(f'PR integration latency focus on mean, metric: {metricname}')
 
 
 def set_title(text):
