@@ -702,7 +702,7 @@ def calc_override_comment_rate(
     df_raw = pd.DataFrame(
         {'commentcount': [1 for c in override_comments]},
         index=[
-            pd.Timestamp(c['comment_obj'].created_at, tz='UTC') for \
+            pd.Timestamp(c['comment_obj'].created_at, tz='UTC') for
                 c in override_comments
         ]
     )
@@ -852,7 +852,7 @@ def plot_override_comment_rate_two_windows(override_comments):
         marker='None',
         color='black',
         ax=ax
-        )
+    )
 
     # The legend story is shitty with pandas intertwined w/ mpl.
     # http://stackoverflow.com/a/30666612/145400
@@ -1064,7 +1064,7 @@ def analyze_merged_prs(prs, report):
 
     # Proceed with analyzing only those pull requests that were not created by
     # mergebot. This ignores an important class of pull request: all downstream
-    # PRs created via the bump-ee command. This is an intentional, following the
+    # PRs created via the bump-ee command. This is intentional, following the
     # idea that a pull request pair comprised of an upstream PR with the
     # corresponding downstream PR is tracking one unit of change to DC/OS.
     log.info('Filter pull requests not created by mergebot.')
@@ -1119,8 +1119,13 @@ def analyze_merged_prs(prs, report):
 
     log.info('Main Dataframe:')
     print(df)
+
     # Sort by time.
     df.sort_index(inplace=True)
+
+    # This line assumes that somewhere in the code path a figure has been
+    # created before, now create a fresh one.
+    plt.figure()
 
     df['opendays'] = df['openseconds'] / 86400
 
