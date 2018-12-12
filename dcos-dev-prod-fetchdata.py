@@ -66,47 +66,47 @@ def main():
 
 def fetch_prs_with_comments_for_repo(repo, reponame):
     prs = fetch_pull_requests(repo, reponame)
-    prs = fetch_comments_for_all_prs(prs, reponame)
+    prs = fetch_details_for_all_prs(prs, reponame)
     return prs
 
 
-def fetch_comments_for_all_prs(prs_current_without_comments, reponame):
+def fetch_details_for_all_prs(prs_current_without_details, reponame):
     # Expect `prs` to be a dictionary with the values being PullRequest objects.
 
-    log.info('Collect issue comments for each PR individually.')
+    log.info('Collect issue comments & events for each PR individually.')
 
     # name_prefix =
     # today = datetime.now().strftime('%Y-%m-%d')
     # filepath = today + '-' + name_prefix + '.pickle'
-    filepath = reponame + '_pull-requests-with-comments.pickle'
+    filepath = reponame + '_pull-requests-with-comments-events.pickle'
 
     prs_old_with_comments = load_file_if_exists(filepath)
 
     if prs_old_with_comments is not None:
 
-        # Fetch comments only for new pull requests.
-        # `prs_current_without_comments` might be fresher (contain more/newer
-        # PRs). `prs_current_without_comments` is a dictionary with the keys
+        # Fetch comments & events only for new pull requests.
+        # `prs_current_without_details` might be fresher (contain more/newer
+        # PRs). `prs_current_without_details` is a dictionary with the keys
         # being the PR numbers.
 
         log.info(
-            'Loaded %s PRs with comments from disk',
+            'Loaded %s PRs with comments & events from disk',
             len(prs_old_with_comments)
         )
 
-        prs_to_fetch_comments_for = {}
+        prs_to_fetch_details_for = {}
 
         # See which PRs are new, compared to what was persisted to disk.
-        new_pr_numbers = set(prs_current_without_comments.keys()) - \
+        new_pr_numbers = set(prs_current_without_details.keys()) - \
             set(prs_old_with_comments.keys())
 
         # For the newly seen PRs we definitely need to fetch comments.
         for n in new_pr_numbers:
-            prs_to_fetch_comments_for[n] = prs_current_without_comments[n]
+            prs_to_fetch_details_for[n] = prs_current_without_details[n]
 
         log.info(
             'Fetching comments for %s new PRs',
-            len(prs_to_fetch_comments_for)
+            len(prs_to_fetch_details_for)
         )
 
         # Note(JP): for the more recent pull requests it is likely that there
