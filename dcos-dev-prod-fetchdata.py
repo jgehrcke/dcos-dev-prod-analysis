@@ -204,17 +204,40 @@ def fetch_pr_comments_in_threadpool(prs_to_fetch_comments_for):
     log.info('Number of requests performed: %s', reqs_performed)
 
 
-def fetch_comments_for_pr(pr):
-    # Executed in a thread as part of a thread pool. Modify object `pr`
-    # in-place.
-    log_remaining_requests()
-    log.info('Fetch comments for pull request %s', pr)
+def fetch_details_for_pr(pr):
+    """
+    Given a PR explicitly fetch all associated
+        - comments
+        - events
+
+    Note(JP): GitHub's API for fetching all comments and events for a given
+    repository should yield the same (and would save many HTTP requests as of
+    better pagnination), but does not yield the same (yields much less data)
+    compared to taking this approach here. The difference is as far as I know
+    not documented.
+
+    Executed in a thread as part of a thread pool. Modify object `pr`
+    in-place.
+
+    This needs more-or-less tight request quota checking.
+    """
+    # check_request_quota_and_wait()
+    log.info('Fetch comments and events for pull request %s', pr)
+
+    # These properties will be serialized upon pickling and can later be
+    # inspected in the analysis part of the program.
     pr._issue_comments = []
+    pr._events = []
+
     for comment in pr.get_issue_comments():
         pr._issue_comments.append(comment)
 
-    return pr._issue_comments
+    # check_request_quota_and_wait()
 
+    for event in pr.as_issue().get_events():
+        pr._events.append(event)
+
+    return pr._issue_comments, pr._events
 
 def fetch_pull_requests(repo, reponame):
 
