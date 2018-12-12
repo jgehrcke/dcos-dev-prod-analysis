@@ -18,7 +18,6 @@ import logging
 import os
 import pickle
 import concurrent.futures
-
 from datetime import datetime
 
 from github import Github
@@ -32,6 +31,7 @@ logging.basicConfig(
     format="%(asctime)s.%(msecs)03d %(levelname)s:%(threadName)s: %(message)s",
     datefmt="%y%m%d-%H:%M:%S"
     )
+
 
 NOW = datetime.utcnow()
 GHUB = Github(
@@ -296,7 +296,6 @@ def fetch_details_for_pr(pr):
 
     This needs more-or-less tight request quota checking.
     """
-    # check_request_quota_and_wait()
     log.info('Fetch comments and events for pull request %s', pr)
 
     # These properties will be serialized upon pickling and can later be
@@ -307,75 +306,10 @@ def fetch_details_for_pr(pr):
     for comment in pr.get_issue_comments():
         pr._issue_comments.append(comment)
 
-    # check_request_quota_and_wait()
-
     for event in pr.as_issue().get_events():
         pr._events.append(event)
 
     return pr._issue_comments, pr._events
-
-
-def fetch_events(repo, reponame):
-
-    """
-
-    GET /repos/:owner/:repo/issues/events
-
-
-    does not seem to list all events. consuming all pages yielded only 300
-    events, this is certainly not everything that happened in the repository.
-
-
-    """
-    persist_filepath = reponame + '_events.pickle'
-    #events = load_file_if_exists(persist_filepath)
-
-    # from pprint import pprint
-
-    # if events is not None:
-        # Take shortcut.
-        # ...
-
-    # Fetch freshly.
-
-    log.info('Fetch repo events with pagination (~100 per HTTP request)')
-
-    reqlimit_before = GHUB.rate_limiting[0]
-
-    # Take a PR-oriented perspective;store events so that they can easily be
-    # looked up by pull request number. Plan for zero to many events per pull
-    # request.
-    events = defaultdict(list)
-    for count, event in enumerate(repo.get_events(), 1):
-
-        # pprint(event)
-        # pprint(event.payload)
-
-        # PyGitHub seems to map different events differently ...
-        if event.type == 'PullRequestEvent':
-            if 'issue' in event.payload and 'pull_request' in event.payload['issue']:
-                prnumber = event.payload['issue']['number']
-                events[prnumber].append(event)
-            elif 'pull_request' in event.payload:
-                prnumber = event.payload['number']
-                events[prnumber].append(event)
-            else:
-                log.info('Weird event: %s, payload: %s', event, event.payload)
-        else:
-            log.info('dropping non-PR event: %r', event)
-
-        if count % 100 == 0:
-            log.info('%s events fetched', count)
-            persist_data(events, persist_filepath)
-
-        #sys.exit()
-
-    reqlimit_after = GHUB.rate_limiting[0]
-    reqs_performed = reqlimit_before - reqlimit_after
-    log.info('Number of requests performed: %s', reqs_performed)
-
-    persist_data(events, persist_filepath)
-    return events
 
 
 def fetch_pull_requests(repo, reponame):
@@ -392,7 +326,8 @@ def fetch_pull_requests(repo, reponame):
         # accumulating over time. That is, a regular complete refresh of the
         # data is advisable anyway.
         log.info('Get first page of last updated PRs from GitHub')
-        lastupdated_prs = repo.get_pulls('all', sort='updated', direction='desc').get_page(0)
+        lastupdated_prs = repo.get_pulls(
+            'all', sort='updated', direction='desc').get_page(0)
         log.info(f'Got {len(lastupdated_prs)} PRs')
         for lastupdated_pr in lastupdated_prs:
             # Replace the PR loaded from disk with its updated variant.
