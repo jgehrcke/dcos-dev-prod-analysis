@@ -39,12 +39,14 @@ import subprocess
 import sys
 import textwrap
 
+from enum import Enum
 from io import StringIO
 from collections import Counter, defaultdict
 from datetime import datetime
 
 import pytablewriter
 import pandas as pd
+import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 
@@ -77,10 +79,10 @@ def main():
     args = parser.parse_args()
 
     prs_downstream = load_prs_from_file(
-        'dcos-enterprise_pull-requests-with-comments.pickle')
+        'dcos-enterprise_pull-requests-with-comments-events.pickle')
 
     prs_upstream = load_prs_from_file(
-        'dcos_pull-requests-with-comments.pickle')
+        'dcos_pull-requests-with-comments-events.pickle')
 
     if os.path.exists(args.output_directory):
         if not os.path.isdir(args.output_directory):
@@ -922,6 +924,132 @@ def savefig(title):
     log.info('Writing PNG figure to %s', fpath_figure)
     plt.savefig(fpath_figure, dpi=150)
     return os.path.basename(fpath_figure)
+
+
+class LabelType(Enum):
+    SHIP_IT = 1
+    READY_FOR_REVIEW = 2
+
+
+class PRLabel:
+    """
+    Represent a pull request label. It has a type and a creation time. Use only
+    the label type when comparing with other PRLabel instances. This simplifies
+    analyses such as building a label transition histogram and finding a certain
+    label type in a list of labels.
+    """
+    __slots__ = 'created_at', 'type'
+
+    def __init__(self, created_at):
+        self.created_at = created_at
+
+    def __hash__(self):
+        return hash(self.type)
+
+    def __eq__(self, other):
+        return self.type is other.type
+
+    def __repr__(self):
+        """
+        Return the label type w/o the 'LabelType.' prefix.
+        """
+        return str(self.type)[10:]
+
+
+class ShipIt(PRLabel):
+    type = LabelType.SHIP_IT
+
+
+class ReadyForReview(PRLabel):
+    type = LabelType.READY_FOR_REVIEW
+
+
+def pr_analyze_label_transitions(pr):
+    """
+    Analyze evolution of labels set for this pull request.
+
+    Extract the following metrics:
+
+        - time from opening PR to last ship it label
+        - time from opening PR to last ready for review label
+        - time from last ship it label to merge
+        - time from last ready for review label to merge
+        - time from last ready for review label to last ship it label
+
+    Store these metrics on the `pr` object in a special attribute, a dictionary.
+
+    Return tuple of PR labels, in order, until merge. Examples:
+
+       (READY_FOR_REVIEW, SHIP_IT)
+    or (READY_FOR_REVIEW,)
+    or ()
+    or (SHIP_IT,)
+    or (READY_FOR_REVIEW, READY_FOR_REVIEW)
+    or (READY_FOR_REVIEW, SHIP_IT, READY_FOR_REVIEW, SHIP_IT)
+
+    This only considers SHIP IT and READY FOR REVIEW labels (effectively
+    ignored all other labels).
+    """
+
+    if not hasattr(pr, '_events'):
+        log.warning('PR object does not have _events property: %r', pr)
+        return ()
+
+    labels_in_order_until_merge = []
+
+    for event in pr._events:
+        if event.event == 'labeled':
+            # The deserialization into `event.label.name` seems to be buggy
+            # with pygithub 1.43, failing for a small number of events with
+            # an AttributeError, despite raw data being there. I filed
+            # https://github.com/PyGithub/PyGithub/issues/991
+            #
+            # Only account for label changes until merge.
+            if event.created_at < pr.merged_at:
+
+                if 'ship' in event._rawData['label']['name'].lower():
+                    labels_in_order_until_merge.append(
+                        ShipIt(event.created_at))
+
+                elif 'review' in event._rawData['label']['name'].lower():
+                    labels_in_order_until_merge.append(
+                        ReadyForReview(event.created_at))
+
+    # Do not rely on labels to already be in chronological order. Default is to
+    # sort in ascending order, with events that happened later in time appearing
+    # later in the list.
+    labels_in_order_until_merge.sort(key=lambda x: x.created_at)
+
+    # Prepare a dictionary for collecting various time metrics of this pull
+    # request. Prepopulate the values with `None` because not all metrics can
+    # be found for all pull requests.
+    ts = {
+        'time_pr_open_to_last_shipit': None,
+        'time_pr_open_to_last_rfr': None,
+        'time_last_shipit_to_pr_merge': None,
+        'time_last_rfr_to_pr_merge': None,
+        'time_last_rfr_to_last_shipit': None
+    }
+
+    last_shipit_time = None
+
+    for label in reversed(labels_in_order_until_merge):
+
+        if label.type is LabelType.SHIP_IT:
+            ts['time_pr_open_to_last_shipit'] = label.created_at - pr.created_at
+            ts['time_last_shipit_to_pr_merge'] = pr.merged_at - label.created_at
+            last_shipit_time = label.created_at
+
+        if label.type is LabelType.READY_FOR_REVIEW:
+            ts['time_pr_open_to_last_rfr'] = label.created_at - pr.created_at
+            ts['time_last_rfr_to_pr_merge'] = pr.merged_at - label.created_at
+            if last_shipit_time:
+                ts['time_last_rfr_to_last_shipit'] = last_shipit_time - label.created_at
+
+    # Modify PR in place.
+    pr._label_transition_timings = ts
+
+    return tuple(labels_in_order_until_merge)
 
 
 def analyze_merged_prs(prs, report):
