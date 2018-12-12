@@ -170,10 +170,9 @@ def fetch_comments_for_all_prs(prs_current_without_comments, reponame):
     return prs_with_comments
 
 
-def fetch_pr_comments_in_threadpool(prs_to_fetch_comments_for):
+def fetch_pr_details_in_threadpool(prs_to_fetch_details_for):
     """
-    Modify `prs_to_fetch_comments_for` in-place.
-    """
+    Modify `prs_to_fetch_details_for` in-place.
 
     # https://github.com/webuildsg/webuild/issues/290 Github does not allow too
     # many requests being issued concurrently. "We can't give you an exact
@@ -183,24 +182,56 @@ def fetch_pr_comments_in_threadpool(prs_to_fetch_comments_for):
     # then reducing further if you notice that you're still hitting these
     # limits." Note(JP): I tried with 20 and immediately ran into an 'abuse'
     # error message. I tried with 10 and it took 2 minutes to generate an abuse
-    # error message. I will retry with 5 and see.
+    # error message. I will retry with 5 and see. Update many weeks later: the
+    # current configuration seems to work fine. Update: when fetching only
+    # comments for every individual PR the current settings work fine. When
+    # additionally also fetching PR events then I ran into
+    #
+    # 181211-14:05:50.140
+    # ERROR:MainThread: PullRequest(title="Refactor dcos_test_utils.marathon",
+    # number=1772) generated an exception: 403 {'documentation_url':
+    # 'https://developer.github.com/v3/#abuse-rate-limits', 'message': 'You have
+    # triggered an abuse detection mechanism. Please wait a few minutes before
+    # you try again.'}
+
+    """
     reqlimit_before = GHUB.rate_limiting[0]
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
 
         # Submit work, build up mapping between futures and pull requests.
         futures_to_prs = {
-            executor.submit(fetch_comments_for_pr, pr): pr
-            for _, pr in prs_to_fetch_comments_for.items()
+            executor.submit(fetch_details_for_pr, pr): pr
+            for _, pr in prs_to_fetch_details_for.items()
             }
 
+        count_total = len(futures_to_prs)
+        count_completed = 0
+        count_failed = 0
+
         for future in concurrent.futures.as_completed(futures_to_prs):
+
             pr = futures_to_prs[future]
+
             try:
-                comments = future.result()
-                log.info('Fetched %s comments for pr %s', len(comments), pr)
+                comments, events = future.result()
+                log.info(
+                    'Fetched %s comments and %s events for pr %s',
+                    len(comments), len(events), pr)
+
+                count_completed += 1
+
+                if count_completed % 20 == 0:
+                    log.info('Completed %s of %s PRs', count_completed, count_total)
+
             except Exception as exc:
                 log.error('%r generated an exception: %s' % (pr, exc))
+                count_failed += 1
 
+        log.info('Fetching defails succeeded for %s PRs', count_completed)
+        log.info('Fetching defails failed for %s PRs', count_failed)
+
+    # Potentially inaccurate log message (if a quota reset happened between
+    # `before` and `after`).
     reqlimit_after = GHUB.rate_limiting[0]
     reqs_performed = reqlimit_before - reqlimit_after
     log.info('Number of requests performed: %s', reqs_performed)
