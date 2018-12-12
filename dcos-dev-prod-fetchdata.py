@@ -22,6 +22,8 @@ import concurrent.futures
 from datetime import datetime
 
 from github import Github
+import requests
+import retrying
 
 
 log = logging.getLogger()
@@ -204,6 +206,37 @@ def fetch_pr_comments_in_threadpool(prs_to_fetch_comments_for):
     log.info('Number of requests performed: %s', reqs_performed)
 
 
+def handle_rate_limit_error(exc):
+
+    if 'wait a few minutes before you try again' in str(exc):
+        log.warning('GitHub abuse mechanism triggered, wait 60 s, retry')
+        return True
+
+    if '403' in str(exc):
+        log.warning('Exception contains 403, wait 60 s, retry: %s', str(exc))
+        # The request count quota is not necessarily responsible for this
+        # exception, but it usually is. Log the expected local time when the
+        # new quota arrives.
+        unix_timestamp_quota_reset = GHUB.rate_limiting_resettime
+        local_time = datetime.fromtimestamp(unix_timestamp_quota_reset)
+        log.info(
+            'New req count quota at: %s',
+            local_time.strftime("%Y-%m-%d %H:%M:%S")
+        )
+        return True
+
+    # For example, `RemoteDisconnected` is a case I have seen in production.
+    if isinstance(exc, requests.exceptions.RequestException):
+        log.warning('RequestException, wait 60 s, retry: %s', str(exc))
+        return True
+
+    return False
+
+
+@retrying.retry(
+    wait_fixed=60000,
+    retry_on_exception=handle_rate_limit_error
+)
 def fetch_details_for_pr(pr):
     """
     Given a PR explicitly fetch all associated
