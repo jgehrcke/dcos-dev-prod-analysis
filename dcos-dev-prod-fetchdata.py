@@ -132,6 +132,17 @@ def fetch_details_for_all_prs(prs_current_without_details, reponame):
             if age.total_seconds() < 60 * 60 * 24 * max_age_days:
                 old_prs_to_analyze.append(pr)
 
+        # If a previous run failed for whichever reason (for example as of the
+        # GitHub request quota limit not being properly handled ) then the
+        # pickled data might have stored the PR objects, but with the _events
+        # and/or the _comments properties missing. For those PRs perform the
+        # complete update.
+        for _, pr in prs_old_with_comments.items():
+            if not hasattr(pr, '_events') or not hasattr(pr, '_comments'):
+                # Adding the same PR twice should not be a problem, is
+                # uniqueified below.
+                old_prs_to_analyze.append(pr)
+
         log.info('Most recent PRs: %s', old_prs_to_analyze)
 
         log.info(
