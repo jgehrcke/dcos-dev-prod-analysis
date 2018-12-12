@@ -206,7 +206,7 @@ def fetch_pr_details_in_threadpool(prs_to_fetch_details_for):
     # you try again.'}
 
     """
-    reqlimit_before = GHUB.rate_limiting[0]
+    reqlimit_before = GHUB.get_rate_limit().core.remaining
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
 
         # Submit work, build up mapping between futures and pull requests.
@@ -226,24 +226,24 @@ def fetch_pr_details_in_threadpool(prs_to_fetch_details_for):
             try:
                 comments, events = future.result()
                 log.info(
-                    'Fetched %s comments and %s events for pr %s',
-                    len(comments), len(events), pr)
+                    'Fetched %s comments, %s events for PR %s',
+                    len(comments), len(events), pr.number)
 
                 count_completed += 1
 
                 if count_completed % 20 == 0:
-                    log.info('Completed %s of %s PRs', count_completed, count_total)
+                    log.info('Processed %s of %s PRs', count_completed, count_total)
 
             except Exception as exc:
                 log.error('%r generated an exception: %s' % (pr, exc))
                 count_failed += 1
 
-        log.info('Fetching defails succeeded for %s PRs', count_completed)
-        log.info('Fetching defails failed for %s PRs', count_failed)
+        log.info('Fetching details succeeded for %s PRs', count_completed)
+        log.info('Fetching details failed for %s PRs', count_failed)
 
     # Potentially inaccurate log message (if a quota reset happened between
     # `before` and `after`).
-    reqlimit_after = GHUB.rate_limiting[0]
+    reqlimit_after = GHUB.get_rate_limit().core.remaining
     reqs_performed = reqlimit_before - reqlimit_after
     log.info('Number of requests performed: %s', reqs_performed)
 
@@ -296,7 +296,7 @@ def fetch_details_for_pr(pr):
 
     This needs more-or-less tight request quota checking.
     """
-    log.info('Fetch comments and events for pull request %s', pr)
+    log.info('Fetch comments and events for PR %s', pr.number)
 
     # These properties will be serialized upon pickling and can later be
     # inspected in the analysis part of the program.
@@ -343,7 +343,7 @@ def fetch_pull_requests(repo, reponame):
         # Return what was read from disk (plus best-effort update)
         return prs
 
-    reqlimit_before = GHUB.rate_limiting[0]
+    reqlimit_before = GHUB.get_rate_limit().core.remaining
     prs = {}
     for count, pr in enumerate(repo.get_pulls('all'), 1):
         # Store `PullRequest` object with integer key in dictionary.
@@ -351,35 +351,12 @@ def fetch_pull_requests(repo, reponame):
         if count % 100 == 0:
             log.info('%s pull requests fetched', count)
 
-    reqlimit_after = GHUB.rate_limiting[0]
+    reqlimit_after = GHUB.get_rate_limit().core.remaining
     reqs_performed = reqlimit_before - reqlimit_after
     log.info('Number of requests performed: %s', reqs_performed)
 
     persist_data(prs, persist_filepath)
     return prs
-
-
-# def check_request_quota_and_wait():
-#     """
-#     GitHub allows 5000 HTTP requests against its API within 1 hour for 1
-#     account. Check quota and proceed if it looks good. Wait for quota to refill
-#     if consumed (takes 1 hour at moast).
-
-#     GHUB.get_rate_limit().rate.remaining issues an HTTP request which does not
-#     count against the quote. It however consumes time.
-
-#     GHUB.rate_limiting[0] is a local lookup based on internal bookkeeping. Use
-#     that so that this function can be called frequently without adding
-#     significant run time.
-#     """
-#     while True:
-#         # remaining = GHUB.get_rate_limit().rate.remaining
-#         remaining = GHUB.rate_limiting[0]
-#         if remaining > 10:
-#             log.info('GitHub API req quota: %r, proceed', remaining)
-#             break
-#         log.info('GitHub API req quota: %r, wait', remaining)
-#         time.sleep(60)
 
 
 def load_file_if_exists(filepath):
