@@ -1075,15 +1075,19 @@ def analyze_merged_prs(prs, report):
     filtered_prs = [pr for pr in filtered_prs if 'train' not in pr.title.lower()]
     log.info('Number of filtered pull requests: %s', len(filtered_prs))
 
-    # Major goal is to look at train
-    # PRs separately, and to filter PRs by certain criteria in general, such as
+    # Future goal is to distinguish PR types, to look at train PRs separately,
+    # and to filter PRs by certain criteria in general, such as
     # - how many lines do they change
     # - are these just simple package bumps?
     # - ...
 
-    # This line assumes that somewhere in the code path a figure has been
-    # created before, now create a fresh one.
-    plt.figure()
+    log.info('Analyze label transitions in filtered PRs')
+    label_transitions = [pr_analyze_label_transitions(pr) for pr in filtered_prs]
+
+    log.info('Pull request label transition histogram, top 50')
+    counter = Counter(label_transitions)
+    for transition, count in counter.most_common(50):
+        print('{:>8}: {}'.format(count, transition))
 
     log.info('Build main Dataframe')
 
