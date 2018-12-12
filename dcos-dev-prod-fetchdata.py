@@ -314,6 +314,70 @@ def fetch_details_for_pr(pr):
 
     return pr._issue_comments, pr._events
 
+
+def fetch_events(repo, reponame):
+
+    """
+
+    GET /repos/:owner/:repo/issues/events
+
+
+    does not seem to list all events. consuming all pages yielded only 300
+    events, this is certainly not everything that happened in the repository.
+
+
+    """
+    persist_filepath = reponame + '_events.pickle'
+    #events = load_file_if_exists(persist_filepath)
+
+    # from pprint import pprint
+
+    # if events is not None:
+        # Take shortcut.
+        # ...
+
+    # Fetch freshly.
+
+    log.info('Fetch repo events with pagination (~100 per HTTP request)')
+
+    reqlimit_before = GHUB.rate_limiting[0]
+
+    # Take a PR-oriented perspective;store events so that they can easily be
+    # looked up by pull request number. Plan for zero to many events per pull
+    # request.
+    events = defaultdict(list)
+    for count, event in enumerate(repo.get_events(), 1):
+
+        # pprint(event)
+        # pprint(event.payload)
+
+        # PyGitHub seems to map different events differently ...
+        if event.type == 'PullRequestEvent':
+            if 'issue' in event.payload and 'pull_request' in event.payload['issue']:
+                prnumber = event.payload['issue']['number']
+                events[prnumber].append(event)
+            elif 'pull_request' in event.payload:
+                prnumber = event.payload['number']
+                events[prnumber].append(event)
+            else:
+                log.info('Weird event: %s, payload: %s', event, event.payload)
+        else:
+            log.info('dropping non-PR event: %r', event)
+
+        if count % 100 == 0:
+            log.info('%s events fetched', count)
+            persist_data(events, persist_filepath)
+
+        #sys.exit()
+
+    reqlimit_after = GHUB.rate_limiting[0]
+    reqs_performed = reqlimit_before - reqlimit_after
+    log.info('Number of requests performed: %s', reqs_performed)
+
+    persist_data(events, persist_filepath)
+    return events
+
+
 def fetch_pull_requests(repo, reponame):
 
     log.info('Fetch pull requests with pagination (~100 per HTTP request)')
