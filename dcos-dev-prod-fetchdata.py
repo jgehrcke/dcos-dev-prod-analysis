@@ -56,9 +56,10 @@ def main():
 
     repo = GHUB.get_organization(org).get_repo(reponame)
     log.info('Working with repository `%s`', repo)
-    log_remaining_requests()
+
+    log.info('Request quota limit: %s', GHUB.get_rate_limit())
+    # check_request_quota_and_wait()
     fetch_prs_with_comments_for_repo(repo, reponame)
-    log_remaining_requests()
 
 
 def fetch_prs_with_comments_for_repo(repo, reponame):
@@ -261,9 +262,27 @@ def fetch_pull_requests(repo, reponame):
     return prs
 
 
-def log_remaining_requests():
-    remaining_requests = GHUB.get_rate_limit().rate.remaining
-    log.info('GitHub rate limit remaining requests: %r', remaining_requests)
+# def check_request_quota_and_wait():
+#     """
+#     GitHub allows 5000 HTTP requests against its API within 1 hour for 1
+#     account. Check quota and proceed if it looks good. Wait for quota to refill
+#     if consumed (takes 1 hour at moast).
+
+#     GHUB.get_rate_limit().rate.remaining issues an HTTP request which does not
+#     count against the quote. It however consumes time.
+
+#     GHUB.rate_limiting[0] is a local lookup based on internal bookkeeping. Use
+#     that so that this function can be called frequently without adding
+#     significant run time.
+#     """
+#     while True:
+#         # remaining = GHUB.get_rate_limit().rate.remaining
+#         remaining = GHUB.rate_limiting[0]
+#         if remaining > 10:
+#             log.info('GitHub API req quota: %r, proceed', remaining)
+#             break
+#         log.info('GitHub API req quota: %r, wait', remaining)
+#         time.sleep(60)
 
 
 def load_file_if_exists(filepath):
