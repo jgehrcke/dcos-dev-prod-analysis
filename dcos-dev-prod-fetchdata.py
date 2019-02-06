@@ -121,7 +121,7 @@ def fetch_details_for_all_prs(prs_current_without_details, reponame):
         # requests and their associated comments every now and then is required
         # to make sure that new comments made in old pull requests are not
         # missed.
-        max_age_days = 30
+        max_age_days = 80
         old_prs_to_analyze = []
         log.info('Identifying recent PRs (younger than %s days)', max_age_days)
         for _, pr in prs_old_with_comments.items():
