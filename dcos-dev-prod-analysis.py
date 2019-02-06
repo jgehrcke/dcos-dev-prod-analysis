@@ -1123,7 +1123,8 @@ def analyze_merged_prs(prs, report):
 
     # Convert a number of time differences measured in seconds to days, for
     # easier human consumption in plots.
-    df['opendays'] = df['openseconds'] / 86400
+    df['time_pr_open_to_merge_days'] = df['openseconds'] / 86400
+
 
     for metric in time_diff_metrics:
         df[metric + '_days'] = df[metric + '_seconds'] / 86400
@@ -1137,7 +1138,8 @@ def analyze_merged_prs(prs, report):
 
     latency_median, \
     figure_filepath_latency_raw_linscale, \
-    figure_filepath_latency_raw_logscale = plot_latency(df, 'opendays')
+    figure_filepath_latency_raw_logscale = plot_latency(
+        df, 'time_pr_open_to_merge_days')
 
     plt.figure()
     throughput_mean, figure_throughput_filepath = plot_throughput(filtered_prs)
@@ -1148,21 +1150,28 @@ def analyze_merged_prs(prs, report):
     figure_quality_filepath = plot_quality(df)
 
     plt.figure()
-    figure_latency_focus_on_mean = plot_latency_focus_on_mean(df, 'opendays')
+    figure_latency_focus_on_mean = plot_latency_focus_on_mean(
+        df, 'time_pr_open_to_merge_days')
 
     # Create plots with a different TTM metric, the time difference
     # between the last ship it label and the PR merge. This applies to
     # significantly less pull requests, especially in the more distant past.
     plt.figure()
     figure_filepath_ttm_shipit_to_merge_focus_on_mean = \
-        plot_latency_focus_on_mean(df, 'time_last_shipit_to_pr_merge_days')
+        plot_latency_focus_on_mean(
+            df['2017-03-01':],
+            'time_last_shipit_to_pr_merge_days'
+        )
 
     plt.figure()
     _, \
     figure_filepath_ttm_shipit_to_merge_raw_linscale, \
     figure_filepath_ttm_shipit_to_merge_raw_logscale = plot_latency(
-        df, 'time_last_shipit_to_pr_merge_days')
+        df['2017-03-01':], 'time_last_shipit_to_pr_merge_days')
 
+    plt.figure()
+    figure_filepath_various_latencies = plot_pr_lifecycle_latency_metrics(
+        df['2017-07-01':])
 
     report.write(textwrap.dedent(
     """
@@ -1263,6 +1272,13 @@ def analyze_merged_prs(prs, report):
         figure_filepath_ttm_shipit_to_merge_raw_logscale,
         'Pull request TTM ship-it-to-merge (logarithmic scale)'
     )
+
+    include_figure(
+        report,
+        figure_filepath_various_latencies,
+        'Pull request latencies, various metrics'
+    )
+
 
     report.write(textwrap.dedent(
     """
@@ -1455,7 +1471,7 @@ def plot_latency_focus_on_mean(df, metricname):
         alpha=0.3
     )
 
-    plt.ylim((-5, mean.max() + 0.2 * mean.max()))
+    plt.ylim((-1, mean.max() + 0.075 * mean.max()))
 
     plt.xlabel('Pull request merge time')
     plt.ylabel('Time-to-merge latency [days]')
@@ -1472,6 +1488,50 @@ def plot_latency_focus_on_mean(df, metricname):
 
     plt.tight_layout()
     return savefig(f'PR integration latency focus on mean, metric: {metricname}')
+
+
+def plot_pr_lifecycle_latency_metrics(df):
+
+    # Plot `time_pr_open_to_merge` and then those three metrics that add up to
+    # this (in case of the ideal intended PR life cycle), to see the individual
+    # contributions.
+    metricnames = (
+        #'time_pr_open_to_merge',
+        #'time_pr_open_to_last_shipit',
+        'time_pr_open_to_last_rfr',
+        'time_last_rfr_to_last_shipit',
+        'time_last_shipit_to_pr_merge',
+        #'time_last_rfr_to_pr_merge',
+    )
+
+    for metricname in metricnames:
+        rollingwindow = df[metricname + '_days'].rolling('14d')
+        median = rollingwindow.median()
+        ax = median.plot(
+            linestyle='solid',
+            linewidth=1.5,
+        )
+
+    # For the time range 2017-05 to 2018-12 it makes sense to cut the graph
+    # at 12 so that the details are easier to resolve.
+    #plt.ylim((-0.5, 12))
+    plt.xlabel('Pull request merge time')
+    plt.ylabel('Time [days], 14 day rolling window median')
+    # plt.tight_layout(rect=(0, 0, 1, 0.95))
+
+    # legend_entries = [f'{mn} rolling window median (14 days)' for mn in metricnames]
+
+    ax.legend([
+        'Stage 1: PR opened -> Ready for Review',
+        'Stage 2: Ready for Review -> Ship It',
+        'Stage 3: Ship It -> PR merged'
+        ],
+        numpoints=4,
+        loc='upper left'
+    )
+
+    plt.tight_layout()
+    return savefig(f'PR integration latency, various metrics')
 
 
 def set_title(text):
