@@ -226,9 +226,10 @@ def analyze_pr_comments(prs, report):
 
     A status check override command is issued by a human on a pull request via a
     GitHub comment. An override command associates the name of a failed CI check
-    (from here on called _check name_) with a JIRA ticket tracking the specific
-    cause or symptom of the problem. Example: when a developer issues the
-    override command
+    (the _check name_) with a JIRA ticket ID. The JIRA ticket tracks a specific
+    cause or symptom, usually an instability problem.
+
+    Example: when a developer issues the override command
     ```
     override-status teamcity/dcos/test/dcos-e2e/docker/static/strict https://jira.mesosphere.com/browse/DCOS_OSS-2115
 
@@ -238,8 +239,8 @@ def analyze_pr_comments(prs, report):
     - the CI check with the check name
       `teamcity/dcos/test/dcos-e2e/docker/static/strict` (which itself is
       comprised of hundreds of individual tests) failed as of a known
-      instability in a specific test called `test_vip` (the details are to be
-      inferred from the corresponding JIRA ticket DCOS_OSS-2115), and that
+      instability in a specific test called `test_vip` (the details can be found
+      in the corresponding JIRA ticket DCOS_OSS-2115) and that
     - this failure is unrelated to their patch (which is why they would like to
       _override_ the CI check result from _failed_ to _passed_).
 
@@ -255,9 +256,9 @@ def analyze_pr_comments(prs, report):
       debugging, doing a JIRA search, creating a JIRA ticket, ...).
 
     That is, override command data represent real pain experienced by individual
-    developers as of CI instabilities. These data are the best source for
-    assessing urgency and importance of individual debugging efforts and
-    mitigations.
+    developers as of CI instabilities. These data are a good source for
+    prioritizing work against CI instabilities (which instabilities happen most
+    often? which instabilities are new?).
 
     """
     ))
@@ -340,13 +341,13 @@ def analyze_pr_comments(prs, report):
     )
     report.write(f'{tabletext}\n\n')
 
-    reportfragment = analyze_overrides(
-        'Most frequent overrides (last 10 days)',
-        10,
-        all_override_comments,
-        prs
-    )
-    report.write(reportfragment.getvalue())
+    # reportfragment = analyze_overrides(
+    #     'Most frequent overrides (last 10 days)',
+    #     10,
+    #     all_override_comments,
+    #     prs
+    # )
+    # report.write(reportfragment.getvalue())
 
     reportfragment = analyze_overrides(
         'Most frequent overrides (last 30 days)',
@@ -356,13 +357,13 @@ def analyze_pr_comments(prs, report):
     )
     report.write(reportfragment.getvalue())
 
-    reportfragment = analyze_overrides(
-        'Most frequent overrides (all-time)',
-        10**4,
-        all_override_comments,
-        prs
-    )
-    report.write(reportfragment.getvalue())
+    # reportfragment = analyze_overrides(
+    #     'Most frequent overrides (all-time)',
+    #     10**4,
+    #     all_override_comments,
+    #     prs
+    # )
+    # report.write(reportfragment.getvalue())
 
 
 def analyze_overrides(heading, max_age_days, all_override_comments, prs):
@@ -1182,13 +1183,13 @@ def analyze_merged_prs(prs, report):
     repositories ("upstream" and "downstream"). For making the analysis
     represent how individual developers perceive the process, Mergebot-created
     pull requests and manually created merge train pull requests are not
-    considered. Consequently, pull request pairs (comprised of an upstream PR
-    plus its corresponding Mergebot-managed downstream PR) are counted as a
-    single pull request.
+    considered. Pull request pairs (comprised of an upstream PR plus its
+    corresponding Mergebot-managed downstream PR) are counted as a single pull
+    request.
 
     ### Time-to-merge (TTM)
 
-    #### Time from opening the PR to merge.
+    #### Time from opening the PR to merge
 
     The following plot shows the number of days it took for individual PRs to
     get merged. Each dot represents a single merged PR (or PR pair). The black
@@ -1207,8 +1208,8 @@ def analyze_merged_prs(prs, report):
     """
 
     Before interpreting mean/median it is important to get a feeling for the
-    distribution for the raw data by looking at the same graph as above but with
-    a logarithmic scale instead:
+    distribution for the raw data. For that it is helpful to look at the same
+    graph as above, but with a logarithmic scale instead:
     """
     ))
 
@@ -1220,20 +1221,19 @@ def analyze_merged_prs(prs, report):
 
     report.write(textwrap.dedent(
     """
-    Neither the mean nor the median represent the raw data really well. The data
-    are clustered. A lot can be understood by looking at the distribution of the
-    raw data above. For example, it is an important observation that the
-    time-to-merge is usually distributed across four orders of magnitude.
+    Neither the mean nor the median represent the raw data well. The data are
+    clustered. A lot can be understood by looking at the distribution of the raw
+    data above. For example, it is an important observation that the
+    time-to-merge is usually distributed across about four orders of magnitude.
 
-    For simplicity, further below the analysis uses the time evolution of the
-    median of the time-to-merge. The following plot, instead of showing the raw
-    data, focuses on showing the mean and median and -- to quantify the overall
-    degree of scattering -- additionally visualizes the standard deviation of
-    the data (built for the same rolling time window).
+    When you read the above plot ask yourself: does the time-to-merge appear to
+    be in a tolerable regime? Do you see a trend? Does the raw data appear to be
+    clustered? How do the clusters evolve?
 
-    When you read these time-to-merge plots ask yourself: does the time-to-merge
-    appear to be in a tolerable regime? Do you see a trend? Does the raw data
-    appear to be clustered? How do the clusters evolve?
+    The following plot, instead of showing the raw data, focuses on showing the
+    mean and median and -- to quantify the overall degree of scattering --
+    additionally visualizes the standard deviation of the data.
+
     """
     ))
 
