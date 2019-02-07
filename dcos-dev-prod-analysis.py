@@ -1262,11 +1262,11 @@ def analyze_merged_prs(prs, report):
     #     'Pull request TTM ship-it-to-merge (linear scale)'
     # )
 
-    include_figure(
-        report,
-        figure_filepath_ttm_shipit_to_merge_focus_on_mean,
-        'Pull request TTM ship-it-to-merge (focus on mean)'
-    )
+    # include_figure(
+    #     report,
+    #     figure_filepath_ttm_shipit_to_merge_focus_on_mean,
+    #     'Pull request TTM ship-it-to-merge (focus on mean)'
+    # )
 
     include_figure(
         report,
