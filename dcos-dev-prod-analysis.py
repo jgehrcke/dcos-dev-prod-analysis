@@ -1274,6 +1274,19 @@ def analyze_merged_prs(prs, report):
         'Pull request TTM ship-it-to-merge (logarithmic scale)'
     )
 
+    report.write(textwrap.dedent(
+    """
+    The time a pull request spent between ship-it and merge should be
+    insignificant relative to time spent in previous stages of its life cycle.
+    After all, a ship-it label indicates that fellow developers found that the
+    change is good to go.
+
+    In other words, the total time of a PR spent between opening and merge
+    should be dominated by the previous two stages. Whether or not this is the
+    case is shown by the following graph:
+    """
+    ))
+
     include_figure(
         report,
         figure_filepath_various_latencies,
