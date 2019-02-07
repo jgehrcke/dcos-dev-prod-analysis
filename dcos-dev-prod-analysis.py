@@ -1207,9 +1207,8 @@ def analyze_merged_prs(prs, report):
     report.write(textwrap.dedent(
     """
 
-    Before interpreting mean/median it is important to get a feeling for the
-    distribution for the raw data. For that it is helpful to look at the same
-    graph as above, but with a logarithmic scale instead:
+    As of outliers this plot is hard to resolve in the details. It is helpful to
+    look at the same graph as above but with a logarithmic scale instead:
     """
     ))
 
@@ -1221,10 +1220,12 @@ def analyze_merged_prs(prs, report):
 
     report.write(textwrap.dedent(
     """
-    Neither the mean nor the median represent the raw data well. The data are
-    clustered. A lot can be understood by looking at the distribution of the raw
-    data above. For example, it is an important observation that the
-    time-to-merge is usually distributed across about four orders of magnitude.
+    We can see that neither the mean nor the median represent the raw data well.
+    The data are clustered. A lot can be understood by looking at the
+    distribution of the raw data points, ignoring mean and median. For example,
+    one observation is that the time-to-merge is usually spread across about
+    four orders of magnitude at any given time, with no uniform density
+    distribution.
 
     When you read the above plot ask yourself: does the time-to-merge appear to
     be in a tolerable regime? Do you see a trend? Does the raw data appear to be
@@ -1248,8 +1249,8 @@ def analyze_merged_prs(prs, report):
 
     #### Ship-it to merge
 
-    A subset of the merged pull requests went through a "proper" label life
-    cycle which requires a "ship it" label being set on the pull request before
+    A subset of the merged pull requests went through a proper label life cycle
+    which requires a "ship it" label to be set on the pull request before
     merging. For PRs which fulfill this criterion the following plot shows the
     time difference between the last applied ship it label and the merge time.
     """
