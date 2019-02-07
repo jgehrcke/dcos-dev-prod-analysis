@@ -1399,7 +1399,7 @@ def _plot_latency_core(df, metricname):
         markeredgecolor='gray'
     )
     plt.xlabel('Pull request merge time')
-    plt.ylabel('Time-to-merge (TTM) latency [days]')
+    plt.ylabel('Latency [days]')
     #set_title('Time-to-merge for PRs in both DC/OS repositories')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #    matcher.subtitle
@@ -1488,7 +1488,7 @@ def plot_latency_focus_on_mean(df, metricname):
     plt.ylim((-1, mean.max() + 0.075 * mean.max()))
 
     plt.xlabel('Pull request merge time')
-    plt.ylabel('Time-to-merge latency [days]')
+    plt.ylabel('Latency [days]')
     # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     ax.legend([
@@ -1530,7 +1530,7 @@ def plot_pr_lifecycle_latency_metrics(df):
     # at 12 so that the details are easier to resolve.
     #plt.ylim((-0.5, 12))
     plt.xlabel('Pull request merge time')
-    plt.ylabel('Time [days], 14 day rolling window median')
+    plt.ylabel('Latency [days], 14 day rolling window median')
     # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     # legend_entries = [f'{mn} rolling window median (14 days)' for mn in metricnames]
