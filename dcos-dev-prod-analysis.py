@@ -1485,7 +1485,9 @@ def plot_latency_focus_on_mean(df, metricname):
         alpha=0.3
     )
 
-    plt.ylim((-1, mean.max() + 0.075 * mean.max()))
+    # The global maximum of the mean around is not a thing we need to see: it is
+    # usually dominated by an outlier.
+    plt.ylim((-0.5, mean.max() - 0.2 * mean.max()))
 
     plt.xlabel('Pull request merge time')
     plt.ylabel('Latency [days]')
