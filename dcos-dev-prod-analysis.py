@@ -1223,12 +1223,12 @@ def analyze_merged_prs(prs, report):
     We can see that neither the mean nor the median represent the raw data well.
     The data are clustered. A lot can be understood by looking at the
     distribution of the raw data points, ignoring mean and median. For example,
-    one observation is that the time-to-merge is usually spread across about
+    one observation is that the latency values are usually spread across about
     four orders of magnitude at any given time, with no uniform density
     distribution.
 
-    When you read the above plot ask yourself: does the time-to-merge appear to
-    be in a tolerable regime? Do you see a trend? Does the raw data appear to be
+    When you read the above plot ask yourself: does the latency appear to be in
+    a tolerable regime? Do you see a trend? Does the raw data appear to be
     clustered? How do the clusters evolve?
 
     The following plot, instead of showing the raw data, focuses on showing the
@@ -1252,7 +1252,10 @@ def analyze_merged_prs(prs, report):
     A subset of the merged pull requests went through a proper label life cycle
     which requires a "ship it" label to be set on the pull request before
     merging. For PRs which fulfill this criterion the following plot shows the
-    time difference between the last applied ship it label and the merge time.
+    time difference between the last applied ship it label and the merge time
+    (note that the time window shown in the plots below starts around March
+    2017, as opposed to May 2016 above -- the ship-it label concept was
+    introduced in 2017).
     """
     ))
 
