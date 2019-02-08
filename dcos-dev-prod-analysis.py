@@ -1389,7 +1389,7 @@ def plot_throughput(filtered_prs):
     return throughput, savefig('Pull request integration throughput')
 
 
-def _plot_latency_core(df, metricname):
+def _plot_latency_core(df, metricname, show_mean=True):
     ax = df[metricname].plot(
         # linestyle='dashdot',
         linestyle='None',
@@ -1410,39 +1410,42 @@ def _plot_latency_core(df, metricname):
     mean = rollingwindow.mean()
     median = rollingwindow.median()
 
-    mean.plot(
+    median.plot(
         linestyle='solid',
+        dash_capstyle='round',
         color='black',
         linewidth=1.3,
         ax=ax
     )
 
-    median.plot(
-        linestyle='solid',
-        dash_capstyle='round',
-        color='#e05f4e',
-        linewidth=1.3,
-        ax=ax
-    )
+    if show_mean:
+        mean.plot(
+            linestyle='solid',
+            color='#e05f4e',
+            linewidth=1.3,
+            ax=ax
+        )
 
-    ax.legend([
+    legendlist = [
         f'individual PRs',
-        f'rolling window mean (14 days)',
         f'rolling window median (14 days)',
-        ],
-        numpoints=4
-    )
+        ]
+
+    if show_mean:
+        legendlist.append(f'rolling window mean (14 days)')
+
+    ax.legend(legendlist,numpoints=4)
     return median, ax
 
 
-def plot_latency(df, metricname):
+def plot_latency(df, metricname, show_mean=True):
 
-    median, ax = _plot_latency_core(df, metricname)
+    median, ax = _plot_latency_core(df, metricname, show_mean)
     plt.tight_layout()
     figure_filepath_latency_raw_linscale = savefig(
         f'PR integration latency (linear scale), metric: {metricname}')
 
-    median, ax = _plot_latency_core(df,  metricname)
+    median, ax = _plot_latency_core(df,  metricname, show_mean)
     ax.set_yscale('log')
     plt.tight_layout()
     figure_filepath_latency_raw_logscale = savefig(
