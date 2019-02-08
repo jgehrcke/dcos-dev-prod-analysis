@@ -1168,7 +1168,7 @@ def analyze_merged_prs(prs, report):
     _, \
     figure_filepath_ttm_shipit_to_merge_raw_linscale, \
     figure_filepath_ttm_shipit_to_merge_raw_logscale = plot_latency(
-        df['2017-03-01':], 'time_last_shipit_to_pr_merge_days')
+        df['2017-03-01':], 'time_last_shipit_to_pr_merge_days', show_mean=False)
 
     plt.figure()
     figure_filepath_various_latencies = plot_pr_lifecycle_latency_metrics(
