@@ -1177,7 +1177,7 @@ def analyze_merged_prs(prs, report):
     report.write(textwrap.dedent(
     """
 
-    ## Pull request (PR) integration velocity
+    ## Pull request integration velocity: time-to-merge (TTM)
 
     This analysis considers merged DC/OS pull requests across the two DC/OS
     repositories ("upstream" and "downstream"). For making the analysis
@@ -1187,9 +1187,8 @@ def analyze_merged_prs(prs, report):
     corresponding Mergebot-managed downstream PR) are counted as a single pull
     request.
 
-    ### Time-to-merge (TTM)
 
-    #### Time from opening the PR to merge
+    ### Time from opening the PR to merge
 
     The following plot shows the number of days it took for individual PRs to
     get merged. Each dot represents a single merged PR (or PR pair). The black
@@ -1247,7 +1246,7 @@ def analyze_merged_prs(prs, report):
     report.write(textwrap.dedent(
     """
 
-    #### Ship-it to merge
+    ### Ship-it to merge
 
     A subset of the merged pull requests went through a proper label life cycle
     which requires a "ship it" label to be set on the pull request before
@@ -1300,7 +1299,7 @@ def analyze_merged_prs(prs, report):
     report.write(textwrap.dedent(
     """
 
-    ### Throughput
+    ## Pull request integration velocity: Throughput
 
     The following plot shows the number of PRs merged per day, averaged over a
     rolling time window of two weeks width.
