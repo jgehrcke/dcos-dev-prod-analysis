@@ -1464,7 +1464,7 @@ def plot_latency_focus_on_mean(df, metricname):
     mean = rollingwindow.mean()
     ax = mean.plot(
         linestyle='solid',
-        color='black',
+        color='#e05f4e',
         linewidth=1.3,
     )
 
@@ -1472,7 +1472,7 @@ def plot_latency_focus_on_mean(df, metricname):
 
     ax = median.plot(
         linestyle='solid',
-        color='#e05f4e',
+        color='black',
         linewidth=1.5,
     )
 
