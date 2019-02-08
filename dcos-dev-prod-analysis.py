@@ -1491,9 +1491,11 @@ def plot_latency_focus_on_mean(df, metricname):
         alpha=0.3
     )
 
-    # The global maximum of the mean around is not a thing we need to see: it is
-    # usually dominated by an outlier.
-    plt.ylim((-0.5, mean.max() - 0.2 * mean.max()))
+    # With the type of data at hand here the global maximum of the median is
+    # expected to be lower than the global maximum of the mean; and we are not
+    # that interested in seeing the global max of the mean in the plot as it is
+    # quite sensitive to outliers.
+    plt.ylim((-0.5, median.max() + 0.1 * median.max()))
 
     plt.xlabel('Pull request merge time')
     plt.ylabel('Latency [days]')
