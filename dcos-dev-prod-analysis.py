@@ -101,14 +101,14 @@ def main():
     OUTDIR = args.output_directory
 
     # Perform override command analysis for all pull requests.
-    prs_for_comment_analysis = [
+    prs_for_analysis = [
         pr for pr in
         itertools.chain(prs_downstream.values(), prs_upstream.values())
     ]
 
-    newest_pr_created_at = max(pr.created_at for pr in prs_for_comment_analysis)
+    newest_pr_created_at = max(pr.created_at for pr in prs_for_analysis)
     newest_pr_created_at_text = newest_pr_created_at.strftime('%Y-%m-%d %H:%M UTC')
-    oldest_pr_created_at = min(pr.created_at for pr in prs_for_comment_analysis)
+    oldest_pr_created_at = min(pr.created_at for pr in prs_for_analysis)
     oldest_pr_created_at_text = oldest_pr_created_at.strftime('%Y-%m-%d %H:%M UTC')
 
     now_text = NOW.strftime('%Y-%m-%d %H:%M UTC')
@@ -133,11 +133,11 @@ def main():
     # Lazy-perform MPL config (fail fast above).
     matplotlib_config()
 
-    analyze_pr_comments(prs_for_comment_analysis, markdownreport)
-
-    prs_for_throughput_analysis = prs_for_comment_analysis
+    prs_for_throughput_analysis = prs_for_analysis
+    prs_for_comment_analysis = prs_for_analysis
 
     analyze_merged_prs(prs_for_throughput_analysis, markdownreport)
+    analyze_pr_comments(prs_for_comment_analysis, markdownreport)
 
     log.info('Rewrite JIRA ticket IDs in the Markdown report')
     report_md_text = markdownreport.getvalue()
@@ -1184,10 +1184,9 @@ def analyze_merged_prs(prs, report):
     "[downstream](https://github.com/mesosphere/dcos-enterprise)"). The goal is
     to make the analysis represent how individual developers perceive the
     process which is why Mergebot-created pull requests and manually created
-    merge train pull requests are _not_ considered. Only manually created pull
-    requests created by developers are analyzed. Pull request pairs (comprised
-    of an upstream PR plus its corresponding Mergebot-managed downstream PR) are
-    counted as a single pull request.
+    merge train pull requests are _not_ considered. A pull request pair
+    (comprised of an upstream PR plus its corresponding Mergebot-managed
+    downstream PR) is counted as a single pull request.
 
 
     ### Time from opening the PR to merge
