@@ -1177,23 +1177,25 @@ def analyze_merged_prs(prs, report):
     report.write(textwrap.dedent(
     """
 
-    ## Pull request integration velocity: time-to-merge (TTM)
+    ## Pull request (PR) integration velocity: time-to-merge (TTM)
 
     This analysis considers merged DC/OS pull requests across the two DC/OS
-    repositories ("upstream" and "downstream"). For making the analysis
-    represent how individual developers perceive the process, Mergebot-created
-    pull requests and manually created merge train pull requests are not
-    considered. Pull request pairs (comprised of an upstream PR plus its
-    corresponding Mergebot-managed downstream PR) are counted as a single pull
-    request.
+    repositories ("[upstream](https://github.com/dcos/dcos)" and
+    "[downstream](https://github.com/mesosphere/dcos-enterprise)"). The goal is
+    to make the analysis represent how individual developers perceive the
+    process which is why Mergebot-created pull requests and manually created
+    merge train pull requests are _not_ considered. Only manually created pull
+    requests created by developers are analyzed. Pull request pairs (comprised
+    of an upstream PR plus its corresponding Mergebot-managed downstream PR) are
+    counted as a single pull request.
 
 
     ### Time from opening the PR to merge
 
     The following plot shows the number of days it took for individual PRs to
     get merged. Each dot represents a single merged PR (or PR pair). The black
-    and orange lines shows the arithmetic mean and the median, correspondingly,
-    averaged over a rolling time window of two weeks (14 days) width.
+    and orange lines show the median and arithmetic mean, correspondingly,
+    averaged over a rolling time window of 14 days width.
     """
     ))
 
@@ -1206,8 +1208,8 @@ def analyze_merged_prs(prs, report):
     report.write(textwrap.dedent(
     """
 
-    As of outliers this plot is hard to resolve in the details. It is helpful to
-    look at the same graph as above but with a logarithmic scale instead:
+    As of outliers this plot is hard to resolve in the details. Let's look at
+    the same graph with a logarithmic scale on the latency axis:
     """
     ))
 
@@ -1219,12 +1221,11 @@ def analyze_merged_prs(prs, report):
 
     report.write(textwrap.dedent(
     """
-    We can see that neither the mean nor the median represent the raw data well.
-    The data are clustered. A lot can be understood by looking at the
-    distribution of the raw data points, ignoring mean and median. For example,
-    one observation is that the latency values are usually spread across about
-    four orders of magnitude at any given time, with no uniform density
-    distribution.
+    The latency values are usually spread across about four orders of magnitude
+    at any given time, with no uniform density distribution. There is tendency
+    for cluster formation. Neither the mean nor the median represent the raw
+    data well. Much can be understood by looking at the distribution of the raw
+    data points, ignoring mean and median.
 
     When you read the above plot ask yourself: does the latency appear to be in
     a tolerable regime? Do you see a trend? Does the raw data appear to be
@@ -1246,15 +1247,15 @@ def analyze_merged_prs(prs, report):
     report.write(textwrap.dedent(
     """
 
-    ### Ship-it to merge
+    ### PR life cycle resolved in detail (ship-it to merge, etc)
 
-    A subset of the merged pull requests went through a proper label life cycle
-    which requires a "ship it" label to be set on the pull request before
-    merging. For PRs which fulfill this criterion the following plot shows the
-    time difference between the last applied ship it label and the merge time
-    (note that the time window shown in the plots below starts around March
-    2017, as opposed to May 2016 above -- the ship-it label concept was
-    introduced in 2017).
+    A subset of the merged pull requests went through a proper life cycle which
+    requires a "ship it" label to be set on the pull request before merging. For
+    PRs which fulfill this criterion the following plot shows the time
+    difference between the last applied ship it label and the merge time (note
+    that the time window shown in the plots below starts around March 2017, as
+    opposed to May 2016 above -- the ship-it label concept was introduced only
+    in 2017).
     """
     ))
 
@@ -1285,7 +1286,8 @@ def analyze_merged_prs(prs, report):
 
     In other words, the total time of a PR spent between opening and merge
     should be dominated by the previous two stages. Whether or not this is the
-    case is shown by the following graph:
+    case is shown by the following graph (linear scale without the raw data,
+    showing only the rolling window median):
     """
     ))
 
