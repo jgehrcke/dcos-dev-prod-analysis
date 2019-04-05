@@ -105,7 +105,7 @@ def fetch_details_for_all_prs(prs_current_without_details, reponame):
             prs_to_fetch_details_for[n] = prs_current_without_details[n]
 
         log.info(
-            'Fetching comments for %s new PRs',
+            'Fetching comments & labels for %s new PRs',
             len(prs_to_fetch_details_for)
         )
 
@@ -116,24 +116,24 @@ def fetch_details_for_all_prs(prs_current_without_details, reponame):
         # make this problem go away reliably requires making an HTTP request per
         # pull request which is precisely not what we want to do here (let alone
         # as of GitHub's API rate limit). A 'good enough' best effort approach
-        # for now is to look at pull requests from the last 30 days and to fetch
+        # for now is to look at pull requests from the last N days and to fetch
         # all their associated comments. A complete re-fetch of all pull
         # requests and their associated comments every now and then is required
         # to make sure that new comments made in old pull requests are not
         # missed.
-        max_age_days = 30
+        max_age_days = 80
         old_prs_to_analyze = []
-        log.info('Identifying most recent PRs')
+        log.info('Identifying recent PRs (younger than %s days)', max_age_days)
         for _, pr in prs_old_with_comments.items():
-            # `pr.created_at` sadly is a native datetime object. It is known to
-            # represent the time in UTC, however. `NOW` also is a datetime
+            # `pr.created_at` (sadly) is a native datetime object. It is known
+            # to represent the time in UTC, however. `NOW` also is a datetime
             # object explicitly in UTC.
             age = NOW - pr.created_at
             if age.total_seconds() < 60 * 60 * 24 * max_age_days:
                 old_prs_to_analyze.append(pr)
 
         # If a previous run failed for whichever reason (for example as of the
-        # GitHub request quota limit not being properly handled ) then the
+        # GitHub request quota limit not being properly handled) then the
         # pickled data might have stored the PR objects, but with the _events
         # and/or the _comments properties missing. For those PRs perform the
         # complete update.
@@ -143,7 +143,7 @@ def fetch_details_for_all_prs(prs_current_without_details, reponame):
                 # uniqueified below.
                 old_prs_to_analyze.append(pr)
 
-        log.info('Most recent PRs: %s', old_prs_to_analyze)
+        log.info('Recent PRs: %s', old_prs_to_analyze)
 
         log.info(
             'Fetching comments & events for %s recent PRs',
@@ -158,9 +158,8 @@ def fetch_details_for_all_prs(prs_current_without_details, reponame):
             return prs_old_with_comments
 
     else:
+        # Fetch details for all pull requests.
         prs_to_fetch_details_for = prs_current_without_details
-        # Fetch comments for all pull requests.
-
         log.info(
             'Fetching comments & events for %s PRs',
             len(prs_to_fetch_details_for)
@@ -169,7 +168,7 @@ def fetch_details_for_all_prs(prs_current_without_details, reponame):
     fetch_pr_details_in_threadpool(prs_to_fetch_details_for)
 
     if prs_old_with_comments is not None:
-        # Combine data loaded from disk, and fresh data from GitHub.
+        # Combine data loaded from disk and fresh data from GitHub.
         prs_old_with_comments.update(prs_to_fetch_details_for)
         prs_with_comments = prs_old_with_comments
     else:

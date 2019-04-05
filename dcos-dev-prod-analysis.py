@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2018 Jan-Philip Gehrcke
+# Copyright 2018-2019 Jan-Philip Gehrcke
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
 # use this file except in compliance with the License. You may obtain a copy of
@@ -101,14 +101,14 @@ def main():
     OUTDIR = args.output_directory
 
     # Perform override command analysis for all pull requests.
-    prs_for_comment_analysis = [
+    prs_for_analysis = [
         pr for pr in
         itertools.chain(prs_downstream.values(), prs_upstream.values())
     ]
 
-    newest_pr_created_at = max(pr.created_at for pr in prs_for_comment_analysis)
+    newest_pr_created_at = max(pr.created_at for pr in prs_for_analysis)
     newest_pr_created_at_text = newest_pr_created_at.strftime('%Y-%m-%d %H:%M UTC')
-    oldest_pr_created_at = min(pr.created_at for pr in prs_for_comment_analysis)
+    oldest_pr_created_at = min(pr.created_at for pr in prs_for_analysis)
     oldest_pr_created_at_text = oldest_pr_created_at.strftime('%Y-%m-%d %H:%M UTC')
 
     now_text = NOW.strftime('%Y-%m-%d %H:%M UTC')
@@ -133,11 +133,11 @@ def main():
     # Lazy-perform MPL config (fail fast above).
     matplotlib_config()
 
-    analyze_pr_comments(prs_for_comment_analysis, markdownreport)
-
-    prs_for_throughput_analysis = prs_for_comment_analysis
+    prs_for_throughput_analysis = prs_for_analysis
+    prs_for_comment_analysis = prs_for_analysis
 
     analyze_merged_prs(prs_for_throughput_analysis, markdownreport)
+    analyze_pr_comments(prs_for_comment_analysis, markdownreport)
 
     log.info('Rewrite JIRA ticket IDs in the Markdown report')
     report_md_text = markdownreport.getvalue()
@@ -226,9 +226,10 @@ def analyze_pr_comments(prs, report):
 
     A status check override command is issued by a human on a pull request via a
     GitHub comment. An override command associates the name of a failed CI check
-    (from here on called _check name_) with a JIRA ticket tracking the specific
-    cause or symptom of the problem. Example: when a developer issues the
-    override command
+    (the _check name_) with a JIRA ticket ID. The JIRA ticket tracks a specific
+    cause or symptom, usually an instability problem.
+
+    Example: when a developer issues the override command
     ```
     override-status teamcity/dcos/test/dcos-e2e/docker/static/strict https://jira.mesosphere.com/browse/DCOS_OSS-2115
 
@@ -238,8 +239,8 @@ def analyze_pr_comments(prs, report):
     - the CI check with the check name
       `teamcity/dcos/test/dcos-e2e/docker/static/strict` (which itself is
       comprised of hundreds of individual tests) failed as of a known
-      instability in a specific test called `test_vip` (the details are to be
-      inferred from the corresponding JIRA ticket DCOS_OSS-2115), and that
+      instability in a specific test called `test_vip` (the details can be found
+      in the corresponding JIRA ticket DCOS_OSS-2115) and that
     - this failure is unrelated to their patch (which is why they would like to
       _override_ the CI check result from _failed_ to _passed_).
 
@@ -255,9 +256,9 @@ def analyze_pr_comments(prs, report):
       debugging, doing a JIRA search, creating a JIRA ticket, ...).
 
     That is, override command data represent real pain experienced by individual
-    developers as of CI instabilities. These data are the best source for
-    assessing urgency and importance of individual debugging efforts and
-    mitigations.
+    developers as of CI instabilities. These data are a good source for
+    prioritizing work against CI instabilities (which instabilities happen most
+    often? which instabilities are new?).
 
     """
     ))
@@ -340,13 +341,13 @@ def analyze_pr_comments(prs, report):
     )
     report.write(f'{tabletext}\n\n')
 
-    reportfragment = analyze_overrides(
-        'Most frequent overrides (last 10 days)',
-        10,
-        all_override_comments,
-        prs
-    )
-    report.write(reportfragment.getvalue())
+    # reportfragment = analyze_overrides(
+    #     'Most frequent overrides (last 10 days)',
+    #     10,
+    #     all_override_comments,
+    #     prs
+    # )
+    # report.write(reportfragment.getvalue())
 
     reportfragment = analyze_overrides(
         'Most frequent overrides (last 30 days)',
@@ -356,13 +357,13 @@ def analyze_pr_comments(prs, report):
     )
     report.write(reportfragment.getvalue())
 
-    reportfragment = analyze_overrides(
-        'Most frequent overrides (all-time)',
-        10**4,
-        all_override_comments,
-        prs
-    )
-    report.write(reportfragment.getvalue())
+    # reportfragment = analyze_overrides(
+    #     'Most frequent overrides (all-time)',
+    #     10**4,
+    #     all_override_comments,
+    #     prs
+    # )
+    # report.write(reportfragment.getvalue())
 
 
 def analyze_overrides(heading, max_age_days, all_override_comments, prs):
@@ -839,6 +840,8 @@ def calc_override_comment_rate(
 
 def plot_override_comment_rate_two_windows(override_comments):
 
+    plt.figure()
+
     commentrate_1, window_width_days_1, commentrate_2, window_width_days_2, _, _ = \
         calc_override_comment_rate(override_comments)
 
@@ -1167,7 +1170,7 @@ def analyze_merged_prs(prs, report):
     _, \
     figure_filepath_ttm_shipit_to_merge_raw_linscale, \
     figure_filepath_ttm_shipit_to_merge_raw_logscale = plot_latency(
-        df['2017-03-01':], 'time_last_shipit_to_pr_merge_days')
+        df['2017-03-01':], 'time_last_shipit_to_pr_merge_days', show_mean=False)
 
     plt.figure()
     figure_filepath_various_latencies = plot_pr_lifecycle_latency_metrics(
@@ -1176,24 +1179,24 @@ def analyze_merged_prs(prs, report):
     report.write(textwrap.dedent(
     """
 
-    ## Pull request (PR) integration velocity
+    ## Pull request (PR) integration velocity: time-to-merge (TTM)
 
     This analysis considers merged DC/OS pull requests across the two DC/OS
-    repositories ("upstream" and "downstream"). For making the analysis
-    represent how individual developers perceive the process, Mergebot-created
-    pull requests and manually created merge train pull requests are not
-    considered. Consequently, pull request pairs (comprised of an upstream PR
-    plus its corresponding Mergebot-managed downstream PR) are counted as a
-    single pull request.
+    repositories ("[upstream](https://github.com/dcos/dcos)" and
+    "[downstream](https://github.com/mesosphere/dcos-enterprise)"). The goal is
+    to make the analysis represent how individual developers perceive the
+    process which is why Mergebot-created pull requests and manually created
+    merge train pull requests are _not_ considered. A pull request pair
+    (comprised of an upstream PR plus its corresponding Mergebot-managed
+    downstream PR) is counted as a single pull request.
 
-    ### Time-to-merge (TTM)
 
-    #### Time from opening the PR to merge.
+    ### Time from opening the PR to merge
 
     The following plot shows the number of days it took for individual PRs to
     get merged. Each dot represents a single merged PR (or PR pair). The black
-    and orange lines shows the arithmetic mean and the median, correspondingly,
-    averaged over a rolling time window of two weeks (14 days) width.
+    and orange lines show the median and arithmetic mean, correspondingly,
+    averaged over a rolling time window of 14 days width.
     """
     ))
 
@@ -1206,9 +1209,8 @@ def analyze_merged_prs(prs, report):
     report.write(textwrap.dedent(
     """
 
-    Before interpreting mean/median it is important to get a feeling for the
-    distribution for the raw data by looking at the same graph as above but with
-    a logarithmic scale instead:
+    As of outliers this plot is hard to resolve in the details. Let's look at
+    the same graph with a logarithmic scale on the latency axis:
     """
     ))
 
@@ -1220,20 +1222,20 @@ def analyze_merged_prs(prs, report):
 
     report.write(textwrap.dedent(
     """
-    Neither the mean nor the median represent the raw data really well. The data
-    are clustered. A lot can be understood by looking at the distribution of the
-    raw data above. For example, it is an important observation that the
-    time-to-merge is usually distributed across four orders of magnitude.
+    The latency values are usually spread across about four orders of magnitude
+    at any given time, with no uniform density distribution. There is tendency
+    for cluster formation. Neither the mean nor the median represent the raw
+    data well. Much can be understood by looking at the distribution of the raw
+    data points, ignoring mean and median.
 
-    For simplicity, further below the analysis uses the time evolution of the
-    median of the time-to-merge. The following plot, instead of showing the raw
-    data, focuses on showing the mean and median and -- to quantify the overall
-    degree of scattering -- additionally visualizes the standard deviation of
-    the data (built for the same rolling time window).
+    When you read the above plot ask yourself: does the latency appear to be in
+    a tolerable regime? Do you see a trend? Does the raw data appear to be
+    clustered? How do the clusters evolve?
 
-    When you read these time-to-merge plots ask yourself: does the time-to-merge
-    appear to be in a tolerable regime? Do you see a trend? Does the raw data
-    appear to be clustered? How do the clusters evolve?
+    The following plot, instead of showing the raw data, focuses on showing the
+    mean and median and -- to quantify the overall degree of scattering --
+    additionally visualizes the standard deviation of the data.
+
     """
     ))
 
@@ -1246,12 +1248,15 @@ def analyze_merged_prs(prs, report):
     report.write(textwrap.dedent(
     """
 
-    #### Ship-it to merge
+    ### PR life cycle resolved in detail (ship-it to merge, etc)
 
-    A subset of the merged pull requests went through a "proper" label life
-    cycle which requires a "ship it" label being set on the pull request before
-    merging. For PRs which fulfill this criterion the following plot shows the
-    time difference between the last applied ship it label and the merge time.
+    A subset of the merged pull requests went through a proper life cycle which
+    requires a "ship it" label to be set on the pull request before merging. For
+    PRs which fulfill this criterion the following plot shows the time
+    difference between the last applied ship it label and the merge time (note
+    that the time window shown in the plots below starts around March 2017, as
+    opposed to May 2016 above -- the ship-it label concept was introduced only
+    in 2017).
     """
     ))
 
@@ -1261,17 +1266,31 @@ def analyze_merged_prs(prs, report):
     #     'Pull request TTM ship-it-to-merge (linear scale)'
     # )
 
-    include_figure(
-        report,
-        figure_filepath_ttm_shipit_to_merge_focus_on_mean,
-        'Pull request TTM ship-it-to-merge (focus on mean)'
-    )
+    # include_figure(
+    #     report,
+    #     figure_filepath_ttm_shipit_to_merge_focus_on_mean,
+    #     'Pull request TTM ship-it-to-merge (focus on mean)'
+    # )
 
     include_figure(
         report,
         figure_filepath_ttm_shipit_to_merge_raw_logscale,
         'Pull request TTM ship-it-to-merge (logarithmic scale)'
     )
+
+    report.write(textwrap.dedent(
+    """
+    The time a pull request spent between ship-it and merge should be
+    insignificant relative to time spent in previous stages of its life cycle.
+    After all, a ship-it label indicates that fellow developers found that the
+    change is good to go.
+
+    In other words, the total time of a PR spent between opening and merge
+    should be dominated by the previous two stages. Whether or not this is the
+    case is shown by the following graph (linear scale without the raw data,
+    showing only the rolling window median):
+    """
+    ))
 
     include_figure(
         report,
@@ -1283,7 +1302,7 @@ def analyze_merged_prs(prs, report):
     report.write(textwrap.dedent(
     """
 
-    ### Throughput
+    ## Pull request integration velocity: Throughput
 
     The following plot shows the number of PRs merged per day, averaged over a
     rolling time window of two weeks width.
@@ -1375,7 +1394,7 @@ def plot_throughput(filtered_prs):
     return throughput, savefig('Pull request integration throughput')
 
 
-def _plot_latency_core(df, metricname):
+def _plot_latency_core(df, metricname, show_mean=True):
     ax = df[metricname].plot(
         # linestyle='dashdot',
         linestyle='None',
@@ -1385,7 +1404,7 @@ def _plot_latency_core(df, metricname):
         markeredgecolor='gray'
     )
     plt.xlabel('Pull request merge time')
-    plt.ylabel('Time-to-merge (TTM) latency [days]')
+    plt.ylabel('Latency [days]')
     #set_title('Time-to-merge for PRs in both DC/OS repositories')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
     #    matcher.subtitle
@@ -1396,39 +1415,42 @@ def _plot_latency_core(df, metricname):
     mean = rollingwindow.mean()
     median = rollingwindow.median()
 
-    mean.plot(
+    median.plot(
         linestyle='solid',
+        dash_capstyle='round',
         color='black',
         linewidth=1.3,
         ax=ax
     )
 
-    median.plot(
-        linestyle='solid',
-        dash_capstyle='round',
-        color='#e05f4e',
-        linewidth=1.3,
-        ax=ax
-    )
+    if show_mean:
+        mean.plot(
+            linestyle='solid',
+            color='#e05f4e',
+            linewidth=1.3,
+            ax=ax
+        )
 
-    ax.legend([
+    legendlist = [
         f'individual PRs',
-        f'rolling window mean (14 days)',
         f'rolling window median (14 days)',
-        ],
-        numpoints=4
-    )
+        ]
+
+    if show_mean:
+        legendlist.append(f'rolling window mean (14 days)')
+
+    ax.legend(legendlist,numpoints=4)
     return median, ax
 
 
-def plot_latency(df, metricname):
+def plot_latency(df, metricname, show_mean=True):
 
-    median, ax = _plot_latency_core(df, metricname)
+    median, ax = _plot_latency_core(df, metricname, show_mean)
     plt.tight_layout()
     figure_filepath_latency_raw_linscale = savefig(
         f'PR integration latency (linear scale), metric: {metricname}')
 
-    median, ax = _plot_latency_core(df,  metricname)
+    median, ax = _plot_latency_core(df,  metricname, show_mean)
     ax.set_yscale('log')
     plt.tight_layout()
     figure_filepath_latency_raw_logscale = savefig(
@@ -1447,7 +1469,7 @@ def plot_latency_focus_on_mean(df, metricname):
     mean = rollingwindow.mean()
     ax = mean.plot(
         linestyle='solid',
-        color='black',
+        color='#e05f4e',
         linewidth=1.3,
     )
 
@@ -1455,7 +1477,7 @@ def plot_latency_focus_on_mean(df, metricname):
 
     ax = median.plot(
         linestyle='solid',
-        color='#e05f4e',
+        color='black',
         linewidth=1.5,
     )
 
@@ -1471,10 +1493,14 @@ def plot_latency_focus_on_mean(df, metricname):
         alpha=0.3
     )
 
-    plt.ylim((-1, mean.max() + 0.075 * mean.max()))
+    # With the type of data at hand here the global maximum of the median is
+    # expected to be lower than the global maximum of the mean; and we are not
+    # that interested in seeing the global max of the mean in the plot as it is
+    # quite sensitive to outliers.
+    plt.ylim((-0.5, median.max() + 0.1 * median.max()))
 
     plt.xlabel('Pull request merge time')
-    plt.ylabel('Time-to-merge latency [days]')
+    plt.ylabel('Latency [days]')
     # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     ax.legend([
@@ -1516,7 +1542,7 @@ def plot_pr_lifecycle_latency_metrics(df):
     # at 12 so that the details are easier to resolve.
     #plt.ylim((-0.5, 12))
     plt.xlabel('Pull request merge time')
-    plt.ylabel('Time [days], 14 day rolling window median')
+    plt.ylabel('Latency [days], 14 day rolling window median')
     # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     # legend_entries = [f'{mn} rolling window median (14 days)' for mn in metricnames]
