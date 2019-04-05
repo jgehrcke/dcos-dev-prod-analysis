@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2018 Jan-Philip Gehrcke
+# Copyright 2018-2019 Jan-Philip Gehrcke
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
 # use this file except in compliance with the License. You may obtain a copy of
@@ -839,6 +839,8 @@ def calc_override_comment_rate(
 
 
 def plot_override_comment_rate_two_windows(override_comments):
+
+    plt.figure()
 
     commentrate_1, window_width_days_1, commentrate_2, window_width_days_2, _, _ = \
         calc_override_comment_rate(override_comments)
