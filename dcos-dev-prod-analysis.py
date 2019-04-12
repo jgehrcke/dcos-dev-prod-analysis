@@ -1153,15 +1153,15 @@ def analyze_merged_prs(prs, report):
     figure_quality_filepath = plot_quality(df)
 
     plt.figure()
-    figure_latency_focus_on_mean = plot_latency_focus_on_mean(
+    figure_latency_focus_on_median = plot_latency_focus_on_median(
         df, 'time_pr_open_to_merge_days')
 
     # Create plots with a different TTM metric, the time difference
     # between the last ship it label and the PR merge. This applies to
     # significantly less pull requests, especially in the more distant past.
     plt.figure()
-    figure_filepath_ttm_shipit_to_merge_focus_on_mean = \
-        plot_latency_focus_on_mean(
+    figure_filepath_ttm_shipit_to_merge_focus_on_median = \
+        plot_latency_focus_on_median(
             df['2017-03-01':],
             'time_last_shipit_to_pr_merge_days'
         )
@@ -1252,7 +1252,7 @@ def analyze_merged_prs(prs, report):
 
     include_figure(
         report,
-        figure_latency_focus_on_mean,
+        figure_latency_focus_on_median,
         'Pull request integration latency (focus on mean)'
     )
 
@@ -1279,7 +1279,7 @@ def analyze_merged_prs(prs, report):
 
     # include_figure(
     #     report,
-    #     figure_filepath_ttm_shipit_to_merge_focus_on_mean,
+    #     figure_filepath_ttm_shipit_to_merge_focus_on_median,
     #     'Pull request TTM ship-it-to-merge (focus on mean)'
     # )
 
@@ -1476,17 +1476,27 @@ def plot_latency(df, metricname, show_mean=True):
     )
 
 
-def plot_latency_focus_on_mean(df, metricname):
+def plot_latency_focus_on_median(df, metricname):
 
-    rollingwindow = df[metricname].rolling('14d')
-    mean = rollingwindow.mean()
-    ax = mean.plot(
-        linestyle='solid',
-        color='#e05f4e',
-        linewidth=1.3,
-    )
-
+    rollingwindow = df[metricname].rolling('21d')
     median = rollingwindow.median()
+
+    # mean = rollingwindow.mean()
+    # ax = mean.plot(
+    #     linestyle='solid',
+    #     color='#e05f4e',
+    #     linewidth=1.3,
+    # )
+
+    ax = df[metricname].plot(
+        # linestyle='dashdot',
+        linestyle='None',
+        color='gray',
+        marker='.',
+        markersize=4,
+        markeredgecolor='gray',
+        zorder=1  # Show in the back.
+    )
 
     ax = median.plot(
         linestyle='solid',
@@ -1494,32 +1504,34 @@ def plot_latency_focus_on_mean(df, metricname):
         linewidth=1.5,
     )
 
-    stddev = rollingwindow.std()
-    upperbond = mean + stddev
-    lowerbond = mean - stddev
+    # stddev = rollingwindow.std()
+    # upperbond = mean + stddev
+    # lowerbond = mean - stddev
 
-    ax.fill_between(
-        mean.index,
-        lowerbond,
-        upperbond,
-        facecolor='gray',
-        alpha=0.3
-    )
+    # ax.fill_between(
+    #     mean.index,
+    #     lowerbond,
+    #     upperbond,
+    #     facecolor='gray',
+    #     alpha=0.3
+    # )
 
     # With the type of data at hand here the global maximum of the median is
     # expected to be lower than the global maximum of the mean; and we are not
     # that interested in seeing the global max of the mean in the plot as it is
     # quite sensitive to outliers.
-    plt.ylim((-0.5, median.max() + 0.1 * median.max()))
+    # plt.ylim((-0.5, median.max() + 0.1 * median.max()))
+    plt.ylim((-0.1, 10))
 
-    plt.xlabel('Pull request merge time')
-    plt.ylabel('Latency [days]')
+    # plt.xlabel('Pull request merge time')
+    plt.ylabel('open-to-merge latency [days]')
     # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     ax.legend([
-        f'rolling window mean (14 days)',
-        f'rolling window median (14 days)',
-        f'rolling window std dev (14 says)',
+        #f'rolling window mean (14 days)',
+        'individual PRs (raw data)',
+        'rolling window median (21 days)',
+        #f'rolling window std dev (14 says)',
         ],
         numpoints=4,
         loc='upper left'
