@@ -1406,68 +1406,71 @@ def plot_throughput(filtered_prs):
     return throughput, savefig('Pull request integration throughput')
 
 
-def _plot_latency_core(df, metricname, show_mean=True):
-    ax = df[metricname].plot(
-        # linestyle='dashdot',
-        linestyle='None',
-        color='gray',
-        marker='.',
-        markersize=4,
-        markeredgecolor='gray'
-    )
-    plt.xlabel('Pull request merge time')
-    plt.ylabel('Latency [days]')
-    #set_title('Time-to-merge for PRs in both DC/OS repositories')
-    # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
-    #    matcher.subtitle
-    #set_subtitle('Raw data')
-    #plt.tight_layout(rect=(0, 0, 1, 0.95))
+def _plot_latency_core(df, metricname, show_mean=True, show_raw=True):
 
     rollingwindow = df[metricname].rolling('21d')
     mean = rollingwindow.mean()
     median = rollingwindow.median()
     legendlist = ['rolling window median (21 days)']
 
-    median.plot(
+    # Always show median, in the front
+    ax = median.plot(
         linestyle='solid',
         dash_capstyle='round',
         color='black',
         linewidth=1.3,
-        ax=ax
+        zorder=10
     )
+    plt.xlabel('Pull request merge time')
+    plt.ylabel('Latency [days]')
+
+    if show_raw:
+        df[metricname].plot(
+            # linestyle='dashdot',
+            linestyle='None',
+            color='gray',
+            marker='.',
+            markersize=4,
+            markeredgecolor='gray',
+            ax=ax,
+            zorder=1  # Show in the back.
+        )
+        legendlist.append('individual PRs (raw data)')
 
     if show_mean:
         mean.plot(
             linestyle='solid',
             color='#e05f4e',
             linewidth=1.3,
-            ax=ax
+            ax=ax,
+            zorder=5
         )
+        legendlist.append('rolling window mean (21 days)')
 
-    legendlist = [
-        f'individual PRs',
-        f'rolling window median (14 days)',
-        ]
 
-    if show_mean:
-        legendlist.append(f'rolling window mean (14 days)')
+    #set_title('Time-to-merge for PRs in both DC/OS repositories')
+    # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
+    #    matcher.subtitle
+    #set_subtitle('Raw data')
+    #plt.tight_layout(rect=(0, 0, 1, 0.95))
 
-    ax.legend(legendlist,numpoints=4)
+    ax.legend(legendlist, numpoints=4)
     return median, ax
 
 
-def plot_latency(df, metricname, show_mean=True):
+def plot_latency(
+        df, metricname, show_mean=True, show_raw=True, descr_suffix=''):
 
-    median, ax = _plot_latency_core(df, metricname, show_mean)
+    median, ax = _plot_latency_core(df, metricname, show_mean, show_raw)
     plt.tight_layout()
     figure_filepath_latency_raw_linscale = savefig(
-        f'PR integration latency (linear scale), metric: {metricname}')
+        f'PR integration latency (linear scale), metric: {metricname} {descr_suffix}')
 
-    median, ax = _plot_latency_core(df,  metricname, show_mean)
+    median, ax = _plot_latency_core(df,  metricname, show_mean, show_raw)
     ax.set_yscale('log')
     plt.tight_layout()
     figure_filepath_latency_raw_logscale = savefig(
-        f'PR integration latency (logarithmic scale), metric:  {metricname}')
+        f'PR integration latency (logarithmic scale), metric:  {metricname} {descr_suffix}')
 
     return (
         median,
