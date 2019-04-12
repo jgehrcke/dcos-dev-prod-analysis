@@ -1353,8 +1353,8 @@ def include_figure(report, filepath, heading):
 
 
 def plot_quality(df):
-    df['quality'].plot(color='red')
-    plt.xlabel('Time')
+    df['quality'].plot(color='black')
+    #plt.xlabel('Time')
     plt.ylabel('Throughput [1/day] / TTM [day]')
     # set_title('PR integration velocity for PRs in both DC/OS repos')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
