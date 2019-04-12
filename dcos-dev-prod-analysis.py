@@ -1204,12 +1204,12 @@ def analyze_merged_prs(prs, report):
     downstream PR) is counted as a single pull request.
 
 
-    ### Time from opening the PR to merge
+    ### Open-to-merge latency
 
     The following plot shows the number of days it took for individual PRs to
     get merged. Each dot represents a single merged PR (or PR pair). The black
     and orange lines show the median and arithmetic mean, correspondingly,
-    averaged over a rolling time window of 14 days width.
+    averaged over a rolling time window of 21 days width.
     """
     ))
 
@@ -1241,14 +1241,12 @@ def analyze_merged_prs(prs, report):
     data well. Much can be understood by looking at the distribution of the raw
     data points, ignoring mean and median.
 
-    When you read the above plot ask yourself: does the latency appear to be in
-    a tolerable regime? Do you see a trend? Does the raw data appear to be
-    clustered? How do the clusters evolve?
+    When we read the above plot we should ask ourselves: does the open-to-merge
+    latency appear to be in a tolerable regime? Do we see a trend? Do the raw
+    data points appear to be clustered? How do the clusters evolve over time?
 
-    The following plot, instead of showing the raw data, focuses on showing the
-    mean and median and -- to quantify the overall degree of scattering --
-    additionally visualizes the standard deviation of the data.
-
+    The following linear plot focuses on the interval between 0 and 10 days
+    latency. This makes it easier to address the above's questions.
     """
     ))
 
@@ -1261,12 +1259,12 @@ def analyze_merged_prs(prs, report):
     report.write(textwrap.dedent(
     """
 
-    ### PR life cycle resolved in detail (ship-it to merge, etc)
+    ### PR life cycle resolved in detail (shipit-to-merge, etc)
 
     A subset of the merged pull requests went through a proper life cycle which
-    requires a "ship it" label to be set on the pull request before merging. For
+    requires a "ship-it" label to be set on the pull request before merging. For
     PRs which fulfill this criterion the following plot shows the time
-    difference between the last applied ship it label and the merge time (note
+    difference between the last applied ship-it label and the merge time (note
     that the time window shown in the plots below starts around March 2017, as
     opposed to May 2016 above -- the ship-it label concept was introduced only
     in 2017).
@@ -1318,7 +1316,7 @@ def analyze_merged_prs(prs, report):
     ## Pull request integration velocity: Throughput
 
     The following plot shows the number of PRs merged per day, averaged over a
-    rolling time window of two weeks width.
+    rolling time window of three weeks width.
     """
     ))
 
@@ -1383,8 +1381,8 @@ def plot_throughput(filtered_prs):
     # Sort by time (when the PRs have been merged).
     df.sort_index(inplace=True)
 
-    rollingwindow = df['foo'].rolling('14d')
-    throughput = rollingwindow.count()/14.0
+    rollingwindow = df['foo'].rolling('21d')
+    throughput = rollingwindow.count()/21.0
     # stddev = rollingwindow.std()
 
     ax = throughput.plot(
@@ -1396,7 +1394,7 @@ def plot_throughput(filtered_prs):
     plt.ylabel('Throughput [1/day]')
 
     ax.legend([
-        f'rolling window mean (14 days)',
+        f'rolling window mean (21 days)',
         ],
         numpoints=4
     )
@@ -1424,9 +1422,10 @@ def _plot_latency_core(df, metricname, show_mean=True):
     #set_subtitle('Raw data')
     #plt.tight_layout(rect=(0, 0, 1, 0.95))
 
-    rollingwindow = df[metricname].rolling('14d')
+    rollingwindow = df[metricname].rolling('21d')
     mean = rollingwindow.mean()
     median = rollingwindow.median()
+    legendlist = ['rolling window median (21 days)']
 
     median.plot(
         linestyle='solid',
