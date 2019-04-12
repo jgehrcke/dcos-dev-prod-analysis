@@ -1390,13 +1390,14 @@ def plot_throughput(filtered_prs):
         color='black',
     )
 
-    plt.xlabel('Time')
+    #plt.xlabel('Time')
     plt.ylabel('Throughput [1/day]')
 
     ax.legend([
         f'rolling window mean (21 days)',
         ],
-        numpoints=4
+        numpoints=4,
+        loc='upper left'
     )
 
     # plt.tight_layout(rect=(0, 0, 1, 95))
