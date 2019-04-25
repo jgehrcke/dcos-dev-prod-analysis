@@ -25,20 +25,21 @@ $python dcos-dev-prod-fetchdata.py mesosphere/dcos-enterprise
 
 #### First invocation: fetch all data (slow, affected by GitHub API usage quota)
 
-If the above two commands are invoked for the first time they can individually
-take a long while to complete (like 10 minutes, depending on the connectivity to
-GitHub). The output of the commands continuously informs about the number of
-remaining HTTP requests before GitHub's hourly HTTP request quota hits in
-(GitHub allows 5.000 API HTTP requests per hour).
+If the above two commands are invoked for the first time they will individually
+take a long while to complete (on the order of hours, even with good
+connectivity to GitHub). This is because for each repository the fetcher program
+needs to perform thousands of HTTP requests. The output of the fetcher program
+continuously informs about the progress.
 
-The program is not yet built for the case where the hourly quota is exhausted
-within a single invocation.
+While interacting with GitHub the fetcher program is expected to run into quota
+and rate limit errors emitted by the GitHub API. It handles those errors by
+backing off, waiting, and retrying. The fetcher program also handles most
+transport and HTTP errors by retrying. If it runs on a laptop it is okay to put
+the laptop to sleep during the data collection process -- the collection is
+expected to continue just fine upon resumption.
 
-At the time of writing the first command consumes a significant fraction of the
-hourly quota (roughly 4.000) so that the second command should only be executed
-roughly one hour after the first command has succeeded.
 
-#### Subsequent invocations: best-effort update (fast)
+#### Subsequent invocations: best-effort update (faster)
 
 The program writes the data to CPython pickle files to the current working
 directory and discovers those upon subsequent invocations. If a subsequent
