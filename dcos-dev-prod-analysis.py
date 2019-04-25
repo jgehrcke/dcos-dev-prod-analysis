@@ -1153,15 +1153,15 @@ def analyze_merged_prs(prs, report):
     figure_quality_filepath = plot_quality(df)
 
     plt.figure()
-    figure_latency_focus_on_mean = plot_latency_focus_on_mean(
+    figure_latency_focus_on_median = plot_latency_focus_on_median(
         df, 'time_pr_open_to_merge_days')
 
     # Create plots with a different TTM metric, the time difference
     # between the last ship it label and the PR merge. This applies to
     # significantly less pull requests, especially in the more distant past.
     plt.figure()
-    figure_filepath_ttm_shipit_to_merge_focus_on_mean = \
-        plot_latency_focus_on_mean(
+    figure_filepath_ttm_shipit_to_merge_focus_on_median = \
+        plot_latency_focus_on_median(
             df['2017-03-01':],
             'time_last_shipit_to_pr_merge_days'
         )
@@ -1171,6 +1171,19 @@ def analyze_merged_prs(prs, report):
     figure_filepath_ttm_shipit_to_merge_raw_linscale, \
     figure_filepath_ttm_shipit_to_merge_raw_logscale = plot_latency(
         df['2017-03-01':], 'time_last_shipit_to_pr_merge_days', show_mean=False)
+
+    with plt.xkcd():
+        plt.figure()
+        _, \
+        figure_filepath_ttm_shipit_to_merge_raw_linscale_xkcd, \
+        figure_filepath_ttm_shipit_to_merge_raw_logscale_xkcd = plot_latency(
+            df['2017-07-01':],
+            'time_last_shipit_to_pr_merge_days',
+            show_mean=False,
+            show_raw=False,
+            descr_suffix='XKCD'
+        )
+
 
     plt.figure()
     figure_filepath_various_latencies = plot_pr_lifecycle_latency_metrics(
@@ -1191,12 +1204,12 @@ def analyze_merged_prs(prs, report):
     downstream PR) is counted as a single pull request.
 
 
-    ### Time from opening the PR to merge
+    ### Open-to-merge latency
 
     The following plot shows the number of days it took for individual PRs to
     get merged. Each dot represents a single merged PR (or PR pair). The black
     and orange lines show the median and arithmetic mean, correspondingly,
-    averaged over a rolling time window of 14 days width.
+    averaged over a rolling time window of 21 days width.
     """
     ))
 
@@ -1228,32 +1241,30 @@ def analyze_merged_prs(prs, report):
     data well. Much can be understood by looking at the distribution of the raw
     data points, ignoring mean and median.
 
-    When you read the above plot ask yourself: does the latency appear to be in
-    a tolerable regime? Do you see a trend? Does the raw data appear to be
-    clustered? How do the clusters evolve?
+    When we read the above plot we should ask ourselves: does the open-to-merge
+    latency appear to be in a tolerable regime? Do we see a trend? Do the raw
+    data points appear to be clustered? How do the clusters evolve over time?
 
-    The following plot, instead of showing the raw data, focuses on showing the
-    mean and median and -- to quantify the overall degree of scattering --
-    additionally visualizes the standard deviation of the data.
-
+    The following linear plot focuses on the interval between 0 and 10 days
+    latency. This makes it easier to address the above's questions.
     """
     ))
 
     include_figure(
         report,
-        figure_latency_focus_on_mean,
+        figure_latency_focus_on_median,
         'Pull request integration latency (focus on mean)'
     )
 
     report.write(textwrap.dedent(
     """
 
-    ### PR life cycle resolved in detail (ship-it to merge, etc)
+    ### PR life cycle resolved in detail (shipit-to-merge, etc)
 
     A subset of the merged pull requests went through a proper life cycle which
-    requires a "ship it" label to be set on the pull request before merging. For
+    requires a "ship-it" label to be set on the pull request before merging. For
     PRs which fulfill this criterion the following plot shows the time
-    difference between the last applied ship it label and the merge time (note
+    difference between the last applied ship-it label and the merge time (note
     that the time window shown in the plots below starts around March 2017, as
     opposed to May 2016 above -- the ship-it label concept was introduced only
     in 2017).
@@ -1268,7 +1279,7 @@ def analyze_merged_prs(prs, report):
 
     # include_figure(
     #     report,
-    #     figure_filepath_ttm_shipit_to_merge_focus_on_mean,
+    #     figure_filepath_ttm_shipit_to_merge_focus_on_median,
     #     'Pull request TTM ship-it-to-merge (focus on mean)'
     # )
 
@@ -1305,7 +1316,7 @@ def analyze_merged_prs(prs, report):
     ## Pull request integration velocity: Throughput
 
     The following plot shows the number of PRs merged per day, averaged over a
-    rolling time window of two weeks width.
+    rolling time window of three weeks width.
     """
     ))
 
@@ -1342,8 +1353,8 @@ def include_figure(report, filepath, heading):
 
 
 def plot_quality(df):
-    df['quality'].plot(color='red')
-    plt.xlabel('Time')
+    df['quality'].plot(color='black')
+    #plt.xlabel('Time')
     plt.ylabel('Throughput [1/day] / TTM [day]')
     # set_title('PR integration velocity for PRs in both DC/OS repos')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
@@ -1370,8 +1381,8 @@ def plot_throughput(filtered_prs):
     # Sort by time (when the PRs have been merged).
     df.sort_index(inplace=True)
 
-    rollingwindow = df['foo'].rolling('14d')
-    throughput = rollingwindow.count()/14.0
+    rollingwindow = df['foo'].rolling('21d')
+    throughput = rollingwindow.count()/21.0
     # stddev = rollingwindow.std()
 
     ax = throughput.plot(
@@ -1379,13 +1390,14 @@ def plot_throughput(filtered_prs):
         color='black',
     )
 
-    plt.xlabel('Time')
+    #plt.xlabel('Time')
     plt.ylabel('Throughput [1/day]')
 
     ax.legend([
-        f'rolling window mean (14 days)',
+        f'rolling window mean (21 days)',
         ],
-        numpoints=4
+        numpoints=4,
+        loc='upper left'
     )
 
     # plt.tight_layout(rect=(0, 0, 1, 95))
@@ -1394,67 +1406,71 @@ def plot_throughput(filtered_prs):
     return throughput, savefig('Pull request integration throughput')
 
 
-def _plot_latency_core(df, metricname, show_mean=True):
-    ax = df[metricname].plot(
-        # linestyle='dashdot',
-        linestyle='None',
-        color='gray',
-        marker='.',
-        markersize=4,
-        markeredgecolor='gray'
-    )
-    plt.xlabel('Pull request merge time')
-    plt.ylabel('Latency [days]')
-    #set_title('Time-to-merge for PRs in both DC/OS repositories')
-    # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
-    #    matcher.subtitle
-    #set_subtitle('Raw data')
-    #plt.tight_layout(rect=(0, 0, 1, 0.95))
+def _plot_latency_core(df, metricname, show_mean=True, show_raw=True):
 
-    rollingwindow = df[metricname].rolling('14d')
+    rollingwindow = df[metricname].rolling('21d')
     mean = rollingwindow.mean()
     median = rollingwindow.median()
+    legendlist = ['rolling window median (21 days)']
 
-    median.plot(
+    # Always show median, in the front
+    ax = median.plot(
         linestyle='solid',
         dash_capstyle='round',
         color='black',
         linewidth=1.3,
-        ax=ax
+        zorder=10
     )
+    plt.xlabel('Pull request merge time')
+    plt.ylabel('Latency [days]')
+
+    if show_raw:
+        df[metricname].plot(
+            # linestyle='dashdot',
+            linestyle='None',
+            color='gray',
+            marker='.',
+            markersize=4,
+            markeredgecolor='gray',
+            ax=ax,
+            zorder=1  # Show in the back.
+        )
+        legendlist.append('individual PRs (raw data)')
 
     if show_mean:
         mean.plot(
             linestyle='solid',
             color='#e05f4e',
             linewidth=1.3,
-            ax=ax
+            ax=ax,
+            zorder=5
         )
+        legendlist.append('rolling window mean (21 days)')
 
-    legendlist = [
-        f'individual PRs',
-        f'rolling window median (14 days)',
-        ]
 
-    if show_mean:
-        legendlist.append(f'rolling window mean (14 days)')
+    #set_title('Time-to-merge for PRs in both DC/OS repositories')
+    # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
+    #    matcher.subtitle
+    #set_subtitle('Raw data')
+    #plt.tight_layout(rect=(0, 0, 1, 0.95))
 
-    ax.legend(legendlist,numpoints=4)
+    ax.legend(legendlist, numpoints=4)
     return median, ax
 
 
-def plot_latency(df, metricname, show_mean=True):
+def plot_latency(
+        df, metricname, show_mean=True, show_raw=True, descr_suffix=''):
 
-    median, ax = _plot_latency_core(df, metricname, show_mean)
+    median, ax = _plot_latency_core(df, metricname, show_mean, show_raw)
     plt.tight_layout()
     figure_filepath_latency_raw_linscale = savefig(
-        f'PR integration latency (linear scale), metric: {metricname}')
+        f'PR integration latency (linear scale), metric: {metricname} {descr_suffix}')
 
-    median, ax = _plot_latency_core(df,  metricname, show_mean)
+    median, ax = _plot_latency_core(df,  metricname, show_mean, show_raw)
     ax.set_yscale('log')
     plt.tight_layout()
     figure_filepath_latency_raw_logscale = savefig(
-        f'PR integration latency (logarithmic scale), metric:  {metricname}')
+        f'PR integration latency (logarithmic scale), metric:  {metricname} {descr_suffix}')
 
     return (
         median,
@@ -1463,17 +1479,27 @@ def plot_latency(df, metricname, show_mean=True):
     )
 
 
-def plot_latency_focus_on_mean(df, metricname):
+def plot_latency_focus_on_median(df, metricname):
 
-    rollingwindow = df[metricname].rolling('14d')
-    mean = rollingwindow.mean()
-    ax = mean.plot(
-        linestyle='solid',
-        color='#e05f4e',
-        linewidth=1.3,
-    )
-
+    rollingwindow = df[metricname].rolling('21d')
     median = rollingwindow.median()
+
+    # mean = rollingwindow.mean()
+    # ax = mean.plot(
+    #     linestyle='solid',
+    #     color='#e05f4e',
+    #     linewidth=1.3,
+    # )
+
+    ax = df[metricname].plot(
+        # linestyle='dashdot',
+        linestyle='None',
+        color='gray',
+        marker='.',
+        markersize=4,
+        markeredgecolor='gray',
+        zorder=1  # Show in the back.
+    )
 
     ax = median.plot(
         linestyle='solid',
@@ -1481,32 +1507,34 @@ def plot_latency_focus_on_mean(df, metricname):
         linewidth=1.5,
     )
 
-    stddev = rollingwindow.std()
-    upperbond = mean + stddev
-    lowerbond = mean - stddev
+    # stddev = rollingwindow.std()
+    # upperbond = mean + stddev
+    # lowerbond = mean - stddev
 
-    ax.fill_between(
-        mean.index,
-        lowerbond,
-        upperbond,
-        facecolor='gray',
-        alpha=0.3
-    )
+    # ax.fill_between(
+    #     mean.index,
+    #     lowerbond,
+    #     upperbond,
+    #     facecolor='gray',
+    #     alpha=0.3
+    # )
 
     # With the type of data at hand here the global maximum of the median is
     # expected to be lower than the global maximum of the mean; and we are not
     # that interested in seeing the global max of the mean in the plot as it is
     # quite sensitive to outliers.
-    plt.ylim((-0.5, median.max() + 0.1 * median.max()))
+    # plt.ylim((-0.5, median.max() + 0.1 * median.max()))
+    plt.ylim((-0.1, 10))
 
-    plt.xlabel('Pull request merge time')
-    plt.ylabel('Latency [days]')
+    # plt.xlabel('Pull request merge time')
+    plt.ylabel('open-to-merge latency [days]')
     # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     ax.legend([
-        f'rolling window mean (14 days)',
-        f'rolling window median (14 days)',
-        f'rolling window std dev (14 says)',
+        #f'rolling window mean (14 days)',
+        'individual PRs (raw data)',
+        'rolling window median (21 days)',
+        #f'rolling window std dev (14 says)',
         ],
         numpoints=4,
         loc='upper left'
