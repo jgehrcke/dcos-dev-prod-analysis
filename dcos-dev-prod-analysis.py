@@ -38,12 +38,11 @@ import shutil
 import subprocess
 import sys
 import textwrap
-import uuid
 
 from enum import Enum
 from io import StringIO
 from collections import Counter, OrderedDict, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytablewriter
 import pandas as pd
