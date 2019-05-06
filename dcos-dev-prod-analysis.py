@@ -1256,7 +1256,11 @@ def analyze_merged_prs(prs, reportfragments):
     latency_median, \
     figure_filepath_latency_raw_linscale, \
     figure_filepath_latency_raw_logscale = plot_latency(
-        df, 'time_pr_open_to_merge_days', rollingwindow_w_days=21)
+        df,
+        'time_pr_open_to_merge_days',
+        rollingwindow_w_days=21,
+        ylabel='Open-to-merge latency [days]'
+    )
 
     plt.figure()
     throughput_mean, figure_throughput_filepath = plot_throughput(filtered_prs)
@@ -1287,7 +1291,8 @@ def analyze_merged_prs(prs, reportfragments):
         df['2017-03-01':],
         'time_last_shipit_to_pr_merge_days',
         show_mean=False,
-        rollingwindow_w_days=21
+        rollingwindow_w_days=21,
+        ylabel='Shipit-to-merge latency [days]'
     )
 
     # Same, for last N days. Keep track of figure file paths in global state
@@ -1317,7 +1322,8 @@ def analyze_merged_prs(prs, reportfragments):
             show_mean=False,
             show_raw=False,
             descr_suffix='XKCD',
-            rollingwindow_w_days=21
+            rollingwindow_w_days=21,
+            ylabel='Shipit-to-merge latency [days]'
         )
 
 
@@ -1747,7 +1753,7 @@ def plot_latency_focus_on_median(df, metricname):
     plt.ylim((-0.1, 10))
 
     # plt.xlabel('Pull request merge time')
-    plt.ylabel('open-to-merge latency [days]')
+    plt.ylabel('Open-to-merge latency [days]')
     # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     ax.legend([
