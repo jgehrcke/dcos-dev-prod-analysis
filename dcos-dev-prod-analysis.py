@@ -51,6 +51,12 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 
+from strippicklefiles import (
+    StrippedIssueComment,
+    StrippedPullRequest,
+    StrippedIssueEvent
+)
+
 
 log = logging.getLogger()
 logging.basicConfig(
@@ -85,10 +91,10 @@ def main():
     args = parser.parse_args()
 
     prs_downstream = load_prs_from_file(
-        'dcos-enterprise_pull-requests-with-comments-events.pickle')
+        'dcos-enterprise_pull-requests-with-comments-events.pickle.stripped')
 
     prs_upstream = load_prs_from_file(
-        'dcos_pull-requests-with-comments-events.pickle')
+        'dcos_pull-requests-with-comments-events.pickle.stripped')
 
     if os.path.exists(args.output_directory):
         if not os.path.isdir(args.output_directory):
@@ -1106,11 +1112,13 @@ def pr_analyze_label_transitions(pr):
             # Only account for label changes until merge.
             if event.created_at < pr.merged_at:
 
-                if 'ship' in event._rawData['label']['name'].lower():
+                #if 'ship' in event._rawData['label']['name'].lower():
+                if 'ship' in event._lowerlabelname:
                     labels_in_order_until_merge.append(
                         ShipIt(event.created_at))
 
-                elif 'review' in event._rawData['label']['name'].lower():
+                #elif 'review' in event._rawData['label']['name'].lower():
+                elif 'review' in event._lowerlabelname:
                     labels_in_order_until_merge.append(
                         ReadyForReview(event.created_at))
 
