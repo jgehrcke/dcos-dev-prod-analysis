@@ -1217,7 +1217,7 @@ def analyze_merged_prs(prs, reportfragments):
     latency_median, \
     figure_filepath_latency_raw_linscale, \
     figure_filepath_latency_raw_logscale = plot_latency(
-        df, 'time_pr_open_to_merge_days')
+        df, 'time_pr_open_to_merge_days', rollingwindow_w_days=21)
 
     plt.figure()
     throughput_mean, figure_throughput_filepath = plot_throughput(filtered_prs)
@@ -1245,7 +1245,11 @@ def analyze_merged_prs(prs, reportfragments):
     _, \
     figure_filepath_ttm_shipit_to_merge_raw_linscale, \
     figure_filepath_ttm_shipit_to_merge_raw_logscale = plot_latency(
-        df['2017-03-01':], 'time_last_shipit_to_pr_merge_days', show_mean=False)
+        df['2017-03-01':],
+        'time_last_shipit_to_pr_merge_days',
+        show_mean=False,
+        rollingwindow_w_days=21
+    )
 
     with plt.xkcd():
         plt.figure()
@@ -1256,7 +1260,8 @@ def analyze_merged_prs(prs, reportfragments):
             'time_last_shipit_to_pr_merge_days',
             show_mean=False,
             show_raw=False,
-            descr_suffix='XKCD'
+            descr_suffix='XKCD',
+            rollingwindow_w_days=21
         )
 
 
@@ -1480,12 +1485,13 @@ def plot_throughput(filtered_prs):
     return throughput, savefig('Pull request integration throughput')
 
 
-def _plot_latency_core(df, metricname, show_mean=True, show_raw=True):
+def _plot_latency_core(df, metricname, ylabel, xlabel, rollingwindow_w_days, show_mean=True, show_median=True, show_raw=True):
 
-    rollingwindow = df[metricname].rolling('21d')
+    width_string = f'{rollingwindow_w_days}d'
+
+    rollingwindow = df[metricname].rolling(width_string)
     mean = rollingwindow.mean()
     median = rollingwindow.median()
-    legendlist = ['rolling window median (21 days)']
 
     # Always show median, in the front
     ax = median.plot(
@@ -1519,7 +1525,7 @@ def _plot_latency_core(df, metricname, show_mean=True, show_raw=True):
             ax=ax,
             zorder=5
         )
-        legendlist.append('rolling window mean (21 days)')
+        legendlist.append(f'rolling window mean ({rollingwindow_w_days} days)')
 
 
     #set_title('Time-to-merge for PRs in both DC/OS repositories')
