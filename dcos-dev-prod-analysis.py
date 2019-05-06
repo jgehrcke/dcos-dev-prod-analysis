@@ -1423,8 +1423,11 @@ def analyze_merged_prs(prs, reportfragments):
     # )
 
 
-def include_figure(report, filepath, heading):
-    report.write(f'\n\n[![{heading}]({filepath} "{heading}")]({filepath})\n\n')
+def include_figure(reportfragments, filepath, heading):
+    # They key is not too relevant here, it's the insertion order into
+    # the OrderedDict `reportfragments`.
+    reportfragments['figure-' + filepath] = \
+        f'\n\n[![{heading}]({filepath} "{heading}")]({filepath})\n\n'
 
 
 # What is good is low time to merge, and many pull requests merged per time.
