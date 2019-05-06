@@ -50,6 +50,7 @@ import pandas as pd
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 
 from strippicklefiles import (
     StrippedIssueComment,
@@ -1608,7 +1609,7 @@ def plot_latency(
         ylabel='Latency [days]',
         xlabel='Pull request merge time',
         rollingwindow_w_days=21,
-        figid=None
+        figid=None,
     ):
 
     median, ax = _plot_latency_core(
@@ -1637,6 +1638,13 @@ def plot_latency(
     )
 
     plt.yscale('log')
+
+    # Set ytick labels using 0.01, 0.1, 1, 10, 100, instead of 10^0 etc.
+    # Creds:
+    #  https://stackoverflow.com/q/21920233/145400
+    #  https://stackoverflow.com/q/14530113/145400
+    # ax.set_yticks([0.001, 0.01, 0.1, 0.5, 1, 3, 10])
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
 
     # The tight_layout magic does not get rid of the outer margin. Fortunately,
     # numbers smaller than 0 and larger than 1 for left, bottom, right, top are
