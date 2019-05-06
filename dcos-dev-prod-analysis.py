@@ -38,11 +38,12 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import uuid
 
 from enum import Enum
 from io import StringIO
-from collections import Counter, defaultdict
-from datetime import datetime
+from collections import Counter, OrderedDict, defaultdict
+from datetime import datetime, timedelta
 
 import pytablewriter
 import pandas as pd
@@ -136,8 +137,23 @@ def main():
     prs_for_throughput_analysis = prs_for_analysis
     prs_for_comment_analysis = prs_for_analysis
 
+    # Create ordered dictionary for collecting Markdown report fragments. Pass
+    # it in to functions, expect it to be mutated by individual functions.
+    reportfragments_prs = OrderedDict()
+    analyze_merged_prs(prs_for_throughput_analysis, reportfragments_prs)
+
+    reportfragments_comments = OrderedDict()
+    all_pr_comments, all_override_comments, _ = analyze_pr_comments(prs_for_comment_analysis, reportfragments_comments)
+
     analyze_merged_prs(prs_for_throughput_analysis, markdownreport)
     analyze_pr_comments(prs_for_comment_analysis, markdownreport)
+    for fragmentname, fragment in reportfragments_prs.items():
+        log.info('Write report fragment: %s', fragmentname)
+        markdownreport.write(fragment)
+
+    for fragmentname, fragment in reportfragments_comments.items():
+        log.info('Write report fragment: %s', fragmentname)
+        markdownreport.write(fragment)
 
     log.info('Rewrite JIRA ticket IDs in the Markdown report')
     report_md_text = markdownreport.getvalue()
@@ -177,6 +193,8 @@ def main():
 
 
 def analyze_pr_comments(prs, report):
+
+def analyze_pr_comments(prs, reportfragments):
     """
     Analyze the issue comments in all pull request objects in `prs`.
 
@@ -188,7 +206,6 @@ def analyze_pr_comments(prs, report):
             comments on the pull request (e.g. review comments are not
             included).
     """
-
     log.info('Perform comment analysis for %s PRs', len(prs))
 
     all_pr_comments, all_override_comments = identify_override_comments(prs)
@@ -217,7 +234,7 @@ def analyze_pr_comments(prs, report):
     # extracted from a more narrow time window from the recent past are probably
     # more relevant in practice.
 
-    report.write(textwrap.dedent(
+    reportfragments['apc1'] = textwrap.dedent(
     """
 
     ## Status check override report (CI instability analysis)
@@ -261,14 +278,15 @@ def analyze_pr_comments(prs, report):
     often? which instabilities are new?).
 
     """
-    ))
+    )
 
     # Identify and leave note about newest override command.
     newest_oc_created_at = max(oc['comment_obj'].created_at for oc in all_override_comments)
     oldest_oc_created_at = min(oc['comment_obj'].created_at for oc in all_override_comments)
     newest_oc_created_at_text = newest_oc_created_at.strftime('%Y-%m-%d %H:%M UTC')
     oldest_oc_created_at_text = oldest_oc_created_at.strftime('%Y-%m-%d %H:%M UTC')
-    report.write(textwrap.dedent(
+
+    reportfragments['apc2'] = textwrap.dedent(
     f"""
 
     ### At which rate are override commands issued? Who issues most of them?
@@ -285,16 +303,16 @@ def analyze_pr_comments(prs, report):
     based on the CI check name or JIRA ticket referred to in individual
     commands):
     """
-    ))
+    )
 
     figure_file_abspath = plot_override_comment_rate_two_windows(all_override_comments)
     include_figure(
-        report,
+        reportfragments,
         figure_file_abspath,
         'Override comment rate plotted over time'
     )
 
-    report.write(textwrap.dedent(
+    reportfragments['apc3'] = textwrap.dedent(
     """
     When you read the plot, ask yourself: do you see a trend? Are we getting
     better over time (does the overall override command rate decrease)?
@@ -306,7 +324,7 @@ def analyze_pr_comments(prs, report):
     often in all override commands (the instabilities that they represent have
     been dominant time sinks and pain points, and maybe still are):
     """
-    ))
+    )
     counter = Counter([oc['ticket'] for oc in all_override_comments])
     top_ticketnames = [ticketname for ticketname, count in counter.most_common(10)]
 
@@ -314,12 +332,12 @@ def analyze_pr_comments(prs, report):
         all_override_comments, top_ticketnames)
 
     include_figure(
-        report,
+        reportfragments,
         figure_file_abspath,
         'Override comment rate plotted over time, resolved by individual JIRA tickets'
     )
 
-    report.write(textwrap.dedent(
+    reportfragments['apc4'] = textwrap.dedent(
     """
     When you read the plot, ask yourself: did we address those instabilities
     that have hurt us most? Did we fix them properly, or are they coming back?
@@ -330,7 +348,7 @@ def analyze_pr_comments(prs, report):
     constructing appropriate override commands:
 
     """
-    ))
+    )
 
     topn = 15
     # report.write(f'\nTop {topn} override command issuer:\n\n')
@@ -339,7 +357,7 @@ def analyze_pr_comments(prs, report):
         ['GitHub login', 'Number of overrides'],
         [[item, count] for item, count in counter.most_common(topn)],
     )
-    report.write(f'{tabletext}\n\n')
+    reportfragments['apc5'] = f'{tabletext}\n\n'
 
     # reportfragment = analyze_overrides(
     #     'Most frequent overrides (last 10 days)',
@@ -355,7 +373,7 @@ def analyze_pr_comments(prs, report):
         all_override_comments,
         prs
     )
-    report.write(reportfragment.getvalue())
+    reportfragments['apc6-most-freq-overrides-last30days'] = reportfragment.getvalue()
 
     # reportfragment = analyze_overrides(
     #     'Most frequent overrides (all-time)',
@@ -364,6 +382,8 @@ def analyze_pr_comments(prs, report):
     #     prs
     # )
     # report.write(reportfragment.getvalue())
+
+    return all_pr_comments, all_override_comments, reportfragments
 
 
 def analyze_overrides(heading, max_age_days, all_override_comments, prs):
@@ -414,7 +434,7 @@ def analyze_overrides(heading, max_age_days, all_override_comments, prs):
     return reportfragment
 
 
-def analyze_overrides_in_recent_prs(prs, max_age_days, reportfragment):
+def analyze_overrides_in_recent_prs(prs, max_age_days):
     """
     Find pull requests not older than `max_age_days` and extract all override
     commands issued in them. Perform a statistical analysis on this set of
@@ -1055,7 +1075,7 @@ def pr_analyze_label_transitions(pr):
     return tuple(labels_in_order_until_merge)
 
 
-def analyze_merged_prs(prs, report):
+def analyze_merged_prs(prs, reportfragments):
 
     log.info('Filter merged pull requests.')
     filtered_prs = [pr for pr in prs if pr.merged_at is not None]
@@ -1189,7 +1209,7 @@ def analyze_merged_prs(prs, report):
     figure_filepath_various_latencies = plot_pr_lifecycle_latency_metrics(
         df['2017-07-01':])
 
-    report.write(textwrap.dedent(
+    reportfragments['prs1'] = textwrap.dedent(
     """
 
     ## Pull request (PR) integration velocity: time-to-merge (TTM)
@@ -1211,29 +1231,29 @@ def analyze_merged_prs(prs, report):
     and orange lines show the median and arithmetic mean, correspondingly,
     averaged over a rolling time window of 21 days width.
     """
-    ))
+    )
 
     include_figure(
-        report,
+        reportfragments,
         figure_filepath_latency_raw_linscale,
         'Pull request integration latency'
     )
 
-    report.write(textwrap.dedent(
+    reportfragments['prs2'] = textwrap.dedent(
     """
 
     As of outliers this plot is hard to resolve in the details. Let's look at
     the same graph with a logarithmic scale on the latency axis:
     """
-    ))
+    )
 
     include_figure(
-        report,
+        reportfragments,
         figure_filepath_latency_raw_logscale,
         'Pull request integration latency (logarithmic scale)'
     )
 
-    report.write(textwrap.dedent(
+    reportfragments['prs3'] = textwrap.dedent(
     """
     The latency values are usually spread across about four orders of magnitude
     at any given time, with no uniform density distribution. There is tendency
@@ -1248,15 +1268,15 @@ def analyze_merged_prs(prs, report):
     The following linear plot focuses on the interval between 0 and 10 days
     latency. This makes it easier to address the above's questions.
     """
-    ))
+    )
 
     include_figure(
-        report,
+        reportfragments,
         figure_latency_focus_on_median,
         'Pull request integration latency (focus on mean)'
     )
 
-    report.write(textwrap.dedent(
+    reportfragments['prs4'] = textwrap.dedent(
     """
 
     ### PR life cycle resolved in detail (shipit-to-merge, etc)
@@ -1269,7 +1289,7 @@ def analyze_merged_prs(prs, report):
     opposed to May 2016 above -- the ship-it label concept was introduced only
     in 2017).
     """
-    ))
+    )
 
     # include_figure(
     #     report,
@@ -1284,12 +1304,12 @@ def analyze_merged_prs(prs, report):
     # )
 
     include_figure(
-        report,
+        reportfragments,
         figure_filepath_ttm_shipit_to_merge_raw_logscale,
         'Pull request TTM ship-it-to-merge (logarithmic scale)'
     )
 
-    report.write(textwrap.dedent(
+    reportfragments['prs5'] = textwrap.dedent(
     """
     The time a pull request spent between ship-it and merge should be
     insignificant relative to time spent in previous stages of its life cycle.
@@ -1301,16 +1321,15 @@ def analyze_merged_prs(prs, report):
     case is shown by the following graph (linear scale without the raw data,
     showing only the rolling window median):
     """
-    ))
+    )
 
     include_figure(
-        report,
+        reportfragments,
         figure_filepath_various_latencies,
         'Pull request latencies, various metrics'
     )
 
-
-    report.write(textwrap.dedent(
+    reportfragments['prs6'] = textwrap.dedent(
     """
 
     ## Pull request integration velocity: Throughput
@@ -1318,10 +1337,10 @@ def analyze_merged_prs(prs, report):
     The following plot shows the number of PRs merged per day, averaged over a
     rolling time window of three weeks width.
     """
-    ))
+    )
 
     include_figure(
-        report,
+        reportfragments,
         figure_throughput_filepath,
         'Pull request integration throughput'
     )
