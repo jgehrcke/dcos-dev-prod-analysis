@@ -145,8 +145,19 @@ def main():
     reportfragments_comments = OrderedDict()
     all_pr_comments, all_override_comments, _ = analyze_pr_comments(prs_for_comment_analysis, reportfragments_comments)
 
-    analyze_merged_prs(prs_for_throughput_analysis, markdownreport)
-    analyze_pr_comments(prs_for_comment_analysis, markdownreport)
+    reportfragments_overview = OrderedDict()
+    create_overview(
+        reportfragments_overview,
+        reportfragments_comments,
+        reportfragments_prs,
+        all_override_comments,
+        prs_for_comment_analysis
+    )
+
+    for fragmentname, fragment in reportfragments_overview.items():
+        log.info('Write report fragment: %s', fragmentname)
+        markdownreport.write(fragment)
+
     for fragmentname, fragment in reportfragments_prs.items():
         log.info('Write report fragment: %s', fragmentname)
         markdownreport.write(fragment)
@@ -192,7 +203,46 @@ def main():
         log.info('Pandoc terminated indicating error')
 
 
-def analyze_pr_comments(prs, report):
+def create_overview(
+        reportfragments,
+        reportfragments_comments,
+        reportfragments_prs,
+        all_override_comments,
+        prs_for_comment_analysis
+    ):
+
+    reportfragments['overview1'] = textwrap.dedent(
+    """
+
+    ## Quick overview
+
+    Shipit-to-merge latency for the last 50 days:
+
+    """
+    )
+
+    include_figure(
+        reportfragments,
+        FIGURE_FILE_PATHS['figure_filepath_shipit_to_merge_raw_lst50days_logscale'],
+        'Shipit-to-merge latency, logarithmic scale, raw data only'
+    )
+
+    reportfragments['overview2'] = textwrap.dedent(
+    """
+
+    Most frequent overrides (last 30 days):
+    """
+    )
+
+    reportfragments['overview3'] = analyze_overrides(
+        'Most frequent overrides (last 30 days)',
+        30,
+        all_override_comments,
+        prs_for_comment_analysis,
+        include_heading=False,
+        only_main_table=True
+    ).getvalue()
+
 
 def analyze_pr_comments(prs, reportfragments):
     """
