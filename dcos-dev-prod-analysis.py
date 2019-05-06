@@ -441,13 +441,31 @@ def analyze_pr_comments(prs, reportfragments):
     return all_pr_comments, all_override_comments, reportfragments
 
 
-def analyze_overrides(heading, max_age_days, all_override_comments, prs):
+def analyze_overrides(
+        heading,
+        max_age_days,
+        all_override_comments,
+        prs,
+        include_heading=True,
+        only_main_table=False
+    ):
     print(f'\n\n\n* Override comment analysis: {heading}')
     reportfragment = StringIO()
-    reportfragment.write(f'\n\n### {heading}\n\n')
+
+    if include_heading:
+        reportfragment.write(f'\n\n### {heading}\n\n')
+
     reportfragment.write(f'Based on override commands issued in the last {max_age_days} days. ')
-    analyze_overrides_last_n_days(all_override_comments, max_age_days, reportfragment)
-    analyze_overrides_in_recent_prs(prs, max_age_days, reportfragment)
+    analyze_overrides_last_n_days(
+        all_override_comments,
+        max_age_days,
+        reportfragment,
+        only_main_table
+    )
+    analyze_overrides_in_recent_prs(prs, max_age_days)
+
+    if only_main_table:
+        return reportfragment
 
     # Find first occurrence of individual override JIRA tickets, and show the
     # ones that were used for the first time within the last N days (this
@@ -516,7 +534,7 @@ def analyze_overrides_in_recent_prs(prs, max_age_days):
     # Do not, for now, include this in the markdown report.
 
 
-def analyze_overrides_last_n_days(override_comments, n, reportfragment):
+def analyze_overrides_last_n_days(override_comments, n, reportfragment, only_main_table=False):
     print(f'** Histograms from override comments younger than {n} days')
     max_age_days = n
     ocs_to_analyze = []
@@ -534,10 +552,10 @@ def analyze_overrides_last_n_days(override_comments, n, reportfragment):
     # and https://github.com/PyGithub/PyGithub/issues/512 and
     # https://stackoverflow.com/a/30696682/145400.
     reportfragment.write(f'Oldest override command issued at {oldest_created_at} (UTC). ')
-    build_histograms_from_ocs(ocs_to_analyze, reportfragment)
+    build_histograms_from_ocs(ocs_to_analyze, reportfragment, only_main_table)
 
 
-def build_histograms_from_ocs(override_comments, reportfragment):
+def build_histograms_from_ocs(override_comments, reportfragment, only_main_table):
     topn = 10
     print(f'   Top {topn} JIRA tickets used in override comments')
     reportfragment.write(
@@ -549,6 +567,9 @@ def build_histograms_from_ocs(override_comments, reportfragment):
         [[item, count] for item, count in counter.most_common(topn)],
     )
     reportfragment.write(tabletext)
+
+    if only_main_table:
+        return
 
     print(f'   Top {topn} CI check names used in override comments')
     reportfragment.write(f'\nTop {topn} CI status check names:\n\n')
