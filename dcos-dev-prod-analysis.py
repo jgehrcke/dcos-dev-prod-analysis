@@ -64,6 +64,11 @@ NOW = datetime.utcnow()
 TODAY = NOW.strftime('%Y-%m-%d')
 OUTDIR = None
 
+# Keep global state for figures written by the individual parts of the program
+# so that these figure files can be re-used by the different report fragment
+# generators.
+FIGURE_FILE_PATHS = {}
+
 
 def main():
     global OUTDIR
@@ -1540,6 +1545,11 @@ def plot_latency(
     plt.tight_layout()
     figure_filepath_latency_raw_logscale = savefig(
         f'PR integration latency (logarithmic scale), metric:  {metricname} {descr_suffix}')
+
+    # Keep record of these figure files in a global state dictionary.
+    if figid is not None:
+        FIGURE_FILE_PATHS[figid + '_logscale'] = figure_filepath_latency_raw_logscale
+        FIGURE_FILE_PATHS[figid + '_linscale'] = figure_filepath_latency_raw_linscale
 
     return (
         median,
