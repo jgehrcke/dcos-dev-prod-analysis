@@ -1272,6 +1272,21 @@ def analyze_merged_prs(prs, reportfragments):
         rollingwindow_w_days=21
     )
 
+    # Same, for last N days. Keep track of figure file paths in global state
+    # dict.
+    plt.figure(figsize=(10.0, 3.5))
+    _, _, _ = plot_latency(
+        df.last('50D'),
+        'time_last_shipit_to_pr_merge_days',
+        show_mean=False,
+        show_median=False,
+        show_raw=True,
+        ylabel='Shipit-to-merge latency [days]',
+        xlabel=None,
+        descr_suffix='last50days',
+        figid='figure_filepath_shipit_to_merge_raw_lst50days'
+    )
+
     with plt.xkcd():
         plt.figure()
         _, \
