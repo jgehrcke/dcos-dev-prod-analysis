@@ -1517,19 +1517,26 @@ def _plot_latency_core(df, metricname, ylabel, xlabel, rollingwindow_w_days, sho
     mean = rollingwindow.mean()
     median = rollingwindow.median()
 
-    # Always show median, in the front
-    ax = median.plot(
-        linestyle='solid',
-        dash_capstyle='round',
-        color='black',
-        linewidth=1.3,
-        zorder=10
-    )
-    plt.xlabel('Pull request merge time')
-    plt.ylabel('Latency [days]')
+    #offset_seconds = - int(rollingwindow_w_days * 24 * 60 * 60 / 2.0) + 1
+    #median = median.shift(offset_seconds)
+
+    legendlist = []
+
+    ax = None
+
+    if show_median:
+        ax = median.plot(
+            linestyle='solid',
+            dash_capstyle='round',
+            color='black',
+            linewidth=1.3,
+            zorder=10,
+            fontsize=6
+        )
+        legendlist.append(f'rolling window median ({rollingwindow_w_days} days)')
 
     if show_raw:
-        df[metricname].plot(
+        ax = df[metricname].plot(
             # linestyle='dashdot',
             linestyle='None',
             color='gray',
@@ -1537,20 +1544,26 @@ def _plot_latency_core(df, metricname, ylabel, xlabel, rollingwindow_w_days, sho
             markersize=4,
             markeredgecolor='gray',
             ax=ax,
-            zorder=1  # Show in the back.
+            zorder=1,  # Show in the back.
+            fontsize=6,
+            clip_on=True,
         )
-        legendlist.append('individual PRs (raw data)')
+        legendlist.append('individual PRs')
 
     if show_mean:
-        mean.plot(
+        ax = mean.plot(
             linestyle='solid',
             color='#e05f4e',
             linewidth=1.3,
             ax=ax,
-            zorder=5
+            zorder=5,
+            fontsize=6
         )
         legendlist.append(f'rolling window mean ({rollingwindow_w_days} days)')
 
+    if xlabel is not None:
+        plt.xlabel('Pull request merge time', fontsize=8)
+    plt.ylabel(ylabel, fontsize=8)
 
     #set_title('Time-to-merge for PRs in both DC/OS repositories')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
@@ -1558,21 +1571,55 @@ def _plot_latency_core(df, metricname, ylabel, xlabel, rollingwindow_w_days, sho
     #set_subtitle('Raw data')
     #plt.tight_layout(rect=(0, 0, 1, 0.95))
 
-    ax.legend(legendlist, numpoints=4)
+    ax.legend(legendlist, numpoints=4, fontsize=8)
     return median, ax
 
 
 def plot_latency(
-        df, metricname, show_mean=True, show_raw=True, descr_suffix=''):
+        df,
+        metricname,
+        show_mean=True,
+        show_median=True,
+        show_raw=True,
+        descr_suffix='',
+        ylabel='Latency [days]',
+        xlabel='Pull request merge time',
+        rollingwindow_w_days=21,
+        figid=None
+    ):
 
-    median, ax = _plot_latency_core(df, metricname, show_mean, show_raw)
+    median, ax = _plot_latency_core(
+        df=df,
+        metricname=metricname,
+        ylabel=ylabel,
+        xlabel=xlabel,
+        rollingwindow_w_days=rollingwindow_w_days,
+        show_mean=show_mean,
+        show_median=show_median,
+        show_raw=show_raw,
+    )
     plt.tight_layout()
     figure_filepath_latency_raw_linscale = savefig(
         f'PR integration latency (linear scale), metric: {metricname} {descr_suffix}')
 
-    median, ax = _plot_latency_core(df,  metricname, show_mean, show_raw)
-    ax.set_yscale('log')
-    plt.tight_layout()
+    median, ax = _plot_latency_core(
+        df=df,
+        metricname=metricname,
+        ylabel=ylabel,
+        xlabel=xlabel,
+        rollingwindow_w_days=rollingwindow_w_days,
+        show_mean=show_mean,
+        show_median=show_median,
+        show_raw=show_raw
+    )
+
+    plt.yscale('log')
+
+    # The tight_layout magic does not get rid of the outer margin. Fortunately,
+    # numbers smaller than 0 and larger than 1 for left, bottom, right, top are
+    # allowed.
+    plt.tight_layout(rect=(-0.01, -0.07, 1.0, 1.0))
+    #plt.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0, hspace=0)
     figure_filepath_latency_raw_logscale = savefig(
         f'PR integration latency (logarithmic scale), metric:  {metricname} {descr_suffix}')
 
