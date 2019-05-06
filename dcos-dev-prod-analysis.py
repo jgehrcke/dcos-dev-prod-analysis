@@ -135,8 +135,8 @@ def main():
     The report is generated based on GitHub pull request data from both DC/OS
     repositories. The code for generating this report lives in
     [`dcos-dev-prod-analysis`](https://github.com/jgehrcke/dcos-dev-prod-analysis).
-    The newest pull request considered for this report was created at
-    {newest_pr_created_at_text}. The oldest pull request was created at
+    The newest pull request (PR) considered for this report was created at
+    {newest_pr_created_at_text}. The oldest PR was created at
     {oldest_pr_created_at_text}.
 
 
@@ -169,6 +169,15 @@ def main():
     for fragmentname, fragment in reportfragments_overview.items():
         log.info('Write report fragment: %s', fragmentname)
         markdownreport.write(fragment)
+
+    markdownreport.write(textwrap.dedent(
+    """
+
+
+    # All-time stats (with explanations)
+
+
+    """))
 
     for fragmentname, fragment in reportfragments_prs.items():
         log.info('Write report fragment: %s', fragmentname)
@@ -226,9 +235,9 @@ def create_overview(
     reportfragments['overview1'] = textwrap.dedent(
     """
 
-    ## Quick overview
+    # Recent past (quick overview)
 
-    Shipit-to-merge latency for the last 50 days:
+    Pull request (PR) shipit-to-merge latency for the last 50 days:
 
     """
     )
@@ -242,7 +251,7 @@ def create_overview(
     reportfragments['overview2'] = textwrap.dedent(
     """
 
-    Most frequent overrides (last 30 days):
+    Current CI instabilities that hurt productivity:
     """
     )
 
@@ -1319,7 +1328,7 @@ def analyze_merged_prs(prs, reportfragments):
     reportfragments['prs1'] = textwrap.dedent(
     """
 
-    ## Pull request (PR) integration velocity: time-to-merge (TTM)
+    ## Pull request integration latency: time-to-merge (TTM)
 
     This analysis considers merged DC/OS pull requests across the two DC/OS
     repositories ("[upstream](https://github.com/dcos/dcos)" and
@@ -1439,7 +1448,7 @@ def analyze_merged_prs(prs, reportfragments):
     reportfragments['prs6'] = textwrap.dedent(
     """
 
-    ## Pull request integration velocity: Throughput
+    ## Pull request integration throughput
 
     The following plot shows the number of PRs merged per day, averaged over a
     rolling time window of three weeks width.
