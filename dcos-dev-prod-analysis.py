@@ -1282,7 +1282,7 @@ def analyze_merged_prs(prs, reportfragments):
     )
 
     # Same, for last N days. Keep track of figure file paths in global state
-    # dict.
+    # dict. Use this in overview section.
     plt.figure(figsize=(10.0, 3.5))
     _, _, _ = plot_latency(
         df.last('50D'),
@@ -1290,8 +1290,10 @@ def analyze_merged_prs(prs, reportfragments):
         show_mean=False,
         show_median=False,
         show_raw=True,
-        ylabel='Shipit-to-merge latency [days]',
+        ylabel='Shipit-to-merge latency [hours]',
         xlabel=None,
+        yticks=[0.1, 0.5, 1, 2, 5, 10, 100],
+        convert_to_hours=True,  # Use unit [hours] instead of days
         descr_suffix='last50days',
         figid='figure_filepath_shipit_to_merge_raw_lst50days'
     )
@@ -1533,11 +1535,27 @@ def plot_throughput(filtered_prs):
     return throughput, savefig('Pull request integration throughput')
 
 
-def _plot_latency_core(df, metricname, ylabel, xlabel, rollingwindow_w_days, show_mean=True, show_median=True, show_raw=True):
+def _plot_latency_core(
+        df,
+        metricname,
+        ylabel,
+        xlabel,
+        rollingwindow_w_days,
+        convert_to_hours=False,
+        show_mean=True,
+        show_median=True,
+        show_raw=True
+    ):
 
     width_string = f'{rollingwindow_w_days}d'
 
-    rollingwindow = df[metricname].rolling(width_string)
+    series_to_plot = df[metricname].copy()
+
+    # Convert from unit [days] tp [hours].
+    if convert_to_hours:
+        series_to_plot = series_to_plot * 24.0
+
+    rollingwindow = series_to_plot.rolling(width_string)
     mean = rollingwindow.mean()
     median = rollingwindow.median()
 
@@ -1560,7 +1578,7 @@ def _plot_latency_core(df, metricname, ylabel, xlabel, rollingwindow_w_days, sho
         legendlist.append(f'rolling window median ({rollingwindow_w_days} days)')
 
     if show_raw:
-        ax = df[metricname].plot(
+        ax = series_to_plot.plot(
             # linestyle='dashdot',
             linestyle='None',
             color='gray',
@@ -1610,6 +1628,8 @@ def plot_latency(
         xlabel='Pull request merge time',
         rollingwindow_w_days=21,
         figid=None,
+        convert_to_hours=False,
+        yticks=None
     ):
 
     median, ax = _plot_latency_core(
@@ -1621,6 +1641,7 @@ def plot_latency(
         show_mean=show_mean,
         show_median=show_median,
         show_raw=show_raw,
+        convert_to_hours=convert_to_hours,
     )
     plt.tight_layout()
     figure_filepath_latency_raw_linscale = savefig(
@@ -1634,7 +1655,8 @@ def plot_latency(
         rollingwindow_w_days=rollingwindow_w_days,
         show_mean=show_mean,
         show_median=show_median,
-        show_raw=show_raw
+        show_raw=show_raw,
+        convert_to_hours=convert_to_hours,
     )
 
     plt.yscale('log')
@@ -1643,7 +1665,9 @@ def plot_latency(
     # Creds:
     #  https://stackoverflow.com/q/21920233/145400
     #  https://stackoverflow.com/q/14530113/145400
-    # ax.set_yticks([0.001, 0.01, 0.1, 0.5, 1, 3, 10])
+    if yticks is not None:
+        # ax.set_yticks([0.001, 0.01, 0.1, 0.5, 1, 3, 10])
+        ax.set_yticks(yticks)
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
 
     # The tight_layout magic does not get rid of the outer margin. Fortunately,
