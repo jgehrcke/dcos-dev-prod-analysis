@@ -722,7 +722,7 @@ def detect_override_comment(comment, pr):
     #     @mesosphere-mergebot override-status "teamcity/dcos/test/upgrade/disabled -> permissive" DCOS-17633
     #
     # Not sure if that is valid from Mergebot's point of view, but it is
-    # real-world data. Note(JP): the `[A-Za-z]+.*[A-Za-z]+` in the
+    # real-world data. Note(JP): the `[A-Za-z0-9]+.*[A-Za-z0-9]+` in the
     # checkname regex group is supposed to make sure that the checkname
     # starts with a word character, ends with a word character, but is
     # otherwise allowed to contain e.g. whitespace characters, even
@@ -739,7 +739,7 @@ def detect_override_comment(comment, pr):
     # are invalid, and the goal is to detect them).
     regex = (
         '@mesosphere-mergebot(\s+)override-status(\s+)'
-        '(?P<checkname>["A-Za-z]+.*["A-Za-z]+)(\s+)(?P<jiraticket>\S+)'
+        '(?P<checkname>["A-Za-z0-9]+.*["A-Za-z0-9]+)(\s+)(?P<jiraticket>\S+)'
     )
 
     match = re.search(regex, text, re.DOTALL)
