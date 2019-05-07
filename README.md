@@ -19,7 +19,7 @@ Fetch the relevant data from GitHub via the following two commands:
 $ python dcos-dev-prod-fetchdata.py dcos/dcos
 [...]
 
-$python dcos-dev-prod-fetchdata.py mesosphere/dcos-enterprise
+$ python dcos-dev-prod-fetchdata.py mesosphere/dcos-enterprise
 [...]
 ```
 
@@ -50,6 +50,15 @@ regularly so that the accumulated error does not get too big over time).
 
 
 ### Analyze data, render Markdown report as HTML
+
+Strip the pickle files before analyzing the data:
+
+```
+python strippicklefiles.py dcos_pull-requests-with-comments-events.pickle
+python strippicklefiles.py dcos-enterprise_pull-requests-with-comments-events.pickle
+```
+
+This greatly reduces runtime and memory footprint of the analysis program.
 
 Invoke the analysis program and point it to a [pandoc](https://pandoc.org/)
 executable:
