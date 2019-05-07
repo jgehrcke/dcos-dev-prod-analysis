@@ -1298,7 +1298,7 @@ def analyze_merged_prs(prs, reportfragments):
 
     # Same, for last N days. Keep track of figure file paths in global state
     # dict. Use this in overview section.
-    plt.figure(figsize=(10.0, 3.5))
+    plt.figure(figsize=(10.0, 3.2))
     _, _, _ = plot_latency(
         df.last('50D'),
         'time_last_shipit_to_pr_merge_days',
@@ -1590,7 +1590,6 @@ def _plot_latency_core(
             color='black',
             linewidth=1.3,
             zorder=10,
-            fontsize=6
         )
         legendlist.append(f'rolling window median ({rollingwindow_w_days} days)')
 
@@ -1604,7 +1603,6 @@ def _plot_latency_core(
             markeredgecolor='gray',
             ax=ax,
             zorder=1,  # Show in the back.
-            fontsize=6,
             clip_on=True,
         )
         legendlist.append('individual PRs')
@@ -1616,13 +1614,15 @@ def _plot_latency_core(
             linewidth=1.3,
             ax=ax,
             zorder=5,
-            fontsize=6
         )
         legendlist.append(f'rolling window mean ({rollingwindow_w_days} days)')
 
     if xlabel is not None:
-        plt.xlabel('Pull request merge time', fontsize=8)
-    plt.ylabel(ylabel, fontsize=8)
+        plt.xlabel('Pull request merge time', fontsize=10)
+
+    plt.ylabel(ylabel, fontsize=10)
+
+    #plt.xticks(fontsize=14,
 
     #set_title('Time-to-merge for PRs in both DC/OS repositories')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
@@ -1843,9 +1843,12 @@ def set_subtitle(text):
 
 
 def matplotlib_config():
-    matplotlib.rcParams['figure.figsize'] = [10.0, 6.5]
+    matplotlib.rcParams['xtick.labelsize'] = 6
+    matplotlib.rcParams['ytick.labelsize'] = 6
+    matplotlib.rcParams['axes.labelsize'] = 10
+    matplotlib.rcParams['figure.figsize'] = [10.0, 4.2]
     matplotlib.rcParams['figure.dpi'] = 100
-    matplotlib.rcParams['savefig.dpi'] = 150
+    matplotlib.rcParams['savefig.dpi'] = 190
     # mpl.rcParams['font.size'] = 12
 
     original_color_cycle = matplotlib.rcParams['axes.prop_cycle']
