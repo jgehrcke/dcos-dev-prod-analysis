@@ -1305,7 +1305,7 @@ def analyze_merged_prs(prs, reportfragments):
         show_raw=True,
         ylabel='Shipit-to-merge latency [hours]',
         xlabel=None,
-        yticks=[0.1, 0.5, 1, 2, 5, 10, 100],
+        yticks=[0.1, 0.5, 1, 2, 5, 10, 24, 48, 72, 150],
         convert_to_hours=True,  # Use unit [hours] instead of days
         descr_suffix='last50days',
         figid='figure_filepath_shipit_to_merge_raw_lst50days'
@@ -1683,6 +1683,9 @@ def plot_latency(
         # ax.set_yticks([0.001, 0.01, 0.1, 0.5, 1, 3, 10])
         ax.set_yticks(yticks)
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
+
+    # https://github.com/pandas-dev/pandas/issues/2010
+    ax.set_xlim(ax.get_xlim()[0] - 1, ax.get_xlim()[1] + 1)
 
     # The tight_layout magic does not get rid of the outer margin. Fortunately,
     # numbers smaller than 0 and larger than 1 for left, bottom, right, top are
