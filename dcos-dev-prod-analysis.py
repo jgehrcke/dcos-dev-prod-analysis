@@ -1664,6 +1664,8 @@ def plot_latency(
     figure_filepath_latency_raw_linscale = savefig(
         f'PR integration latency (linear scale), metric: {metricname} {descr_suffix}')
 
+    plt.figure()
+
     median, ax = _plot_latency_core(
         df=df,
         metricname=metricname,
@@ -1693,7 +1695,8 @@ def plot_latency(
     # The tight_layout magic does not get rid of the outer margin. Fortunately,
     # numbers smaller than 0 and larger than 1 for left, bottom, right, top are
     # allowed.
-    plt.tight_layout(rect=(-0.01, -0.07, 1.0, 1.0))
+    #plt.tight_layout(rect=(-0.01, -0.05, 1.0, 1.0))
+    plt.tight_layout()
     #plt.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0, hspace=0)
     figure_filepath_latency_raw_logscale = savefig(
         f'PR integration latency (logarithmic scale), metric:  {metricname} {descr_suffix}')
