@@ -236,7 +236,7 @@ def create_overview(
 
     # Recent past (quick overview)
 
-    Pull request shipit-to-merge latency for the last 50 days:
+    ### PR shipit-to-merge latency for the last 50 days
 
     """
     )
@@ -250,7 +250,8 @@ def create_overview(
     reportfragments['overview2'] = textwrap.dedent(
     """
 
-    Current CI instabilities that hurt productivity:
+    ### Which CI instabilities have recently hurt productivity?
+
     """
     )
 
