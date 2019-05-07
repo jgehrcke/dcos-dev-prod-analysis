@@ -236,7 +236,7 @@ def create_overview(
 
     # Recent past (quick overview)
 
-    Pull request (PR) shipit-to-merge latency for the last 50 days:
+    Pull request shipit-to-merge latency for the last 50 days:
 
     """
     )
@@ -977,7 +977,7 @@ def plot_override_comment_rate_two_windows(override_comments):
         numpoints=4
     )
 
-    plt.xlabel('Time')
+    # plt.xlabel('Time')
     plt.ylabel('Override command rate [1/day]')
     # set_title('Override command rate (from both DC/OS repositories)')
     # set_subtitle('Arithmetic mean over rolling time window')
@@ -1013,7 +1013,7 @@ def plot_override_comment_rate_multiple_jira_tickets(
         loc='upper left'
     )
 
-    plt.xlabel('Time')
+    # plt.xlabel('Time')
     plt.ylabel('Override command rate [1/day]')
     # set_title('Override command rate for most frequently tagged JIRA tickets')
     # set_subtitle('Arithmetic mean over rolling time window')
@@ -1258,7 +1258,8 @@ def analyze_merged_prs(prs, reportfragments):
         df,
         'time_pr_open_to_merge_days',
         rollingwindow_w_days=21,
-        ylabel='Open-to-merge latency [days]'
+        ylabel='Open-to-merge latency [days]',
+        xlabel=None
     )
 
     plt.figure()
@@ -1291,7 +1292,8 @@ def analyze_merged_prs(prs, reportfragments):
         'time_last_shipit_to_pr_merge_days',
         show_mean=False,
         rollingwindow_w_days=21,
-        ylabel='Shipit-to-merge latency [days]'
+        ylabel='Shipit-to-merge latency [days]',
+        xlabel=None
     )
 
     # Same, for last N days. Keep track of figure file paths in global state
@@ -1304,7 +1306,7 @@ def analyze_merged_prs(prs, reportfragments):
         show_median=False,
         show_raw=True,
         ylabel='Shipit-to-merge latency [hours]',
-        xlabel=None,
+        xlabel='PR merge time',
         yticks=[0.1, 0.5, 1, 2, 5, 10, 24, 48, 72, 150],
         convert_to_hours=True,  # Use unit [hours] instead of days
         descr_suffix='last50days',
@@ -1322,7 +1324,8 @@ def analyze_merged_prs(prs, reportfragments):
             show_raw=False,
             descr_suffix='XKCD',
             rollingwindow_w_days=21,
-            ylabel='Shipit-to-merge latency [days]'
+            ylabel='Shipit-to-merge latency [days]',
+            xlabel=None
         )
 
 
@@ -1347,10 +1350,10 @@ def analyze_merged_prs(prs, reportfragments):
 
     ### Open-to-merge latency
 
-    The following plot shows the number of days it took for individual PRs to
-    get merged. Each dot represents a single merged PR (or PR pair). The black
-    and orange lines show the median and arithmetic mean, correspondingly,
-    averaged over a rolling time window of 21 days width.
+    The following plot shows the number of days it took for individual PRs from
+    beging opened to getting merged. Each dot represents a single merged PR (or
+    PR pair). The black and orange lines show the median and arithmetic mean,
+    correspondingly, averaged over a rolling time window of 21 days width.
     """
     )
 
@@ -1497,7 +1500,7 @@ def include_figure(reportfragments, filepath, heading):
 
 def plot_quality(df):
     df['quality'].plot(color='black')
-    #plt.xlabel('Time')
+    # plt.xlabel('Time')
     plt.ylabel('Throughput [1/day] / TTM [day]')
     # set_title('PR integration velocity for PRs in both DC/OS repos')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
@@ -1533,7 +1536,7 @@ def plot_throughput(filtered_prs):
         color='black',
     )
 
-    #plt.xlabel('Time')
+    # plt.xlabel('Time')
     plt.ylabel('Throughput [1/day]')
 
     ax.legend([
@@ -1798,7 +1801,7 @@ def plot_pr_lifecycle_latency_metrics(df):
     # at 12 so that the details are easier to resolve.
     #plt.ylim((-0.5, 12))
     plt.xlabel('Pull request merge time')
-    plt.ylabel('Latency [days], 14 day rolling window median')
+    plt.ylabel('Latency [days], 14 day rwm')
     # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     # legend_entries = [f'{mn} rolling window median (14 days)' for mn in metricnames]
