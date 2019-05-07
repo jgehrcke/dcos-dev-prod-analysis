@@ -41,7 +41,7 @@ import textwrap
 
 from enum import Enum
 from io import StringIO
-from collections import Counter, defaultdict
+from collections import Counter, OrderedDict, defaultdict
 from datetime import datetime
 
 import pytablewriter
@@ -49,6 +49,13 @@ import pandas as pd
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+
+from strippicklefiles import (
+    StrippedIssueComment,
+    StrippedPullRequest,
+    StrippedIssueEvent
+)
 
 
 log = logging.getLogger()
@@ -62,6 +69,11 @@ logging.basicConfig(
 NOW = datetime.utcnow()
 TODAY = NOW.strftime('%Y-%m-%d')
 OUTDIR = None
+
+# Keep global state for figures written by the individual parts of the program
+# so that these figure files can be re-used by the different report fragment
+# generators.
+FIGURE_FILE_PATHS = {}
 
 
 def main():
@@ -79,10 +91,10 @@ def main():
     args = parser.parse_args()
 
     prs_downstream = load_prs_from_file(
-        'dcos-enterprise_pull-requests-with-comments-events.pickle')
+        'dcos-enterprise_pull-requests-with-comments-events.pickle.stripped')
 
     prs_upstream = load_prs_from_file(
-        'dcos_pull-requests-with-comments-events.pickle')
+        'dcos_pull-requests-with-comments-events.pickle.stripped')
 
     if os.path.exists(args.output_directory):
         if not os.path.isdir(args.output_directory):
@@ -122,8 +134,8 @@ def main():
     The report is generated based on GitHub pull request data from both DC/OS
     repositories. The code for generating this report lives in
     [`dcos-dev-prod-analysis`](https://github.com/jgehrcke/dcos-dev-prod-analysis).
-    The newest pull request considered for this report was created at
-    {newest_pr_created_at_text}. The oldest pull request was created at
+    The newest pull request (PR) considered for this report was created at
+    {newest_pr_created_at_text}. The oldest PR was created at
     {oldest_pr_created_at_text}.
 
 
@@ -136,8 +148,43 @@ def main():
     prs_for_throughput_analysis = prs_for_analysis
     prs_for_comment_analysis = prs_for_analysis
 
-    analyze_merged_prs(prs_for_throughput_analysis, markdownreport)
-    analyze_pr_comments(prs_for_comment_analysis, markdownreport)
+    # Create ordered dictionary for collecting Markdown report fragments. Pass
+    # it in to functions, expect it to be mutated by individual functions.
+    reportfragments_prs = OrderedDict()
+    analyze_merged_prs(prs_for_throughput_analysis, reportfragments_prs)
+
+    reportfragments_comments = OrderedDict()
+    all_pr_comments, all_override_comments, _ = analyze_pr_comments(prs_for_comment_analysis, reportfragments_comments)
+
+    reportfragments_overview = OrderedDict()
+    create_overview(
+        reportfragments_overview,
+        reportfragments_comments,
+        reportfragments_prs,
+        all_override_comments,
+        prs_for_comment_analysis
+    )
+
+    for fragmentname, fragment in reportfragments_overview.items():
+        log.info('Write report fragment: %s', fragmentname)
+        markdownreport.write(fragment)
+
+    markdownreport.write(textwrap.dedent(
+    """
+
+
+    # All-time stats (with explanations)
+
+
+    """))
+
+    for fragmentname, fragment in reportfragments_prs.items():
+        log.info('Write report fragment: %s', fragmentname)
+        markdownreport.write(fragment)
+
+    for fragmentname, fragment in reportfragments_comments.items():
+        log.info('Write report fragment: %s', fragmentname)
+        markdownreport.write(fragment)
 
     log.info('Rewrite JIRA ticket IDs in the Markdown report')
     report_md_text = markdownreport.getvalue()
@@ -176,7 +223,48 @@ def main():
         log.info('Pandoc terminated indicating error')
 
 
-def analyze_pr_comments(prs, report):
+def create_overview(
+        reportfragments,
+        reportfragments_comments,
+        reportfragments_prs,
+        all_override_comments,
+        prs_for_comment_analysis
+    ):
+
+    reportfragments['overview1'] = textwrap.dedent(
+    """
+
+    # Recent past (quick overview)
+
+    Pull request shipit-to-merge latency for the last 50 days:
+
+    """
+    )
+
+    include_figure(
+        reportfragments,
+        FIGURE_FILE_PATHS['figure_filepath_shipit_to_merge_raw_lst50days_logscale'],
+        'Shipit-to-merge latency, logarithmic scale, raw data only'
+    )
+
+    reportfragments['overview2'] = textwrap.dedent(
+    """
+
+    Current CI instabilities that hurt productivity:
+    """
+    )
+
+    reportfragments['overview3'] = analyze_overrides(
+        'Most frequent overrides (last 30 days)',
+        30,
+        all_override_comments,
+        prs_for_comment_analysis,
+        include_heading=False,
+        only_main_table=True
+    ).getvalue()
+
+
+def analyze_pr_comments(prs, reportfragments):
     """
     Analyze the issue comments in all pull request objects in `prs`.
 
@@ -188,7 +276,6 @@ def analyze_pr_comments(prs, report):
             comments on the pull request (e.g. review comments are not
             included).
     """
-
     log.info('Perform comment analysis for %s PRs', len(prs))
 
     all_pr_comments, all_override_comments = identify_override_comments(prs)
@@ -217,7 +304,7 @@ def analyze_pr_comments(prs, report):
     # extracted from a more narrow time window from the recent past are probably
     # more relevant in practice.
 
-    report.write(textwrap.dedent(
+    reportfragments['apc1'] = textwrap.dedent(
     """
 
     ## Status check override report (CI instability analysis)
@@ -261,14 +348,15 @@ def analyze_pr_comments(prs, report):
     often? which instabilities are new?).
 
     """
-    ))
+    )
 
     # Identify and leave note about newest override command.
     newest_oc_created_at = max(oc['comment_obj'].created_at for oc in all_override_comments)
     oldest_oc_created_at = min(oc['comment_obj'].created_at for oc in all_override_comments)
     newest_oc_created_at_text = newest_oc_created_at.strftime('%Y-%m-%d %H:%M UTC')
     oldest_oc_created_at_text = oldest_oc_created_at.strftime('%Y-%m-%d %H:%M UTC')
-    report.write(textwrap.dedent(
+
+    reportfragments['apc2'] = textwrap.dedent(
     f"""
 
     ### At which rate are override commands issued? Who issues most of them?
@@ -285,16 +373,16 @@ def analyze_pr_comments(prs, report):
     based on the CI check name or JIRA ticket referred to in individual
     commands):
     """
-    ))
+    )
 
     figure_file_abspath = plot_override_comment_rate_two_windows(all_override_comments)
     include_figure(
-        report,
+        reportfragments,
         figure_file_abspath,
         'Override comment rate plotted over time'
     )
 
-    report.write(textwrap.dedent(
+    reportfragments['apc3'] = textwrap.dedent(
     """
     When you read the plot, ask yourself: do you see a trend? Are we getting
     better over time (does the overall override command rate decrease)?
@@ -306,7 +394,7 @@ def analyze_pr_comments(prs, report):
     often in all override commands (the instabilities that they represent have
     been dominant time sinks and pain points, and maybe still are):
     """
-    ))
+    )
     counter = Counter([oc['ticket'] for oc in all_override_comments])
     top_ticketnames = [ticketname for ticketname, count in counter.most_common(10)]
 
@@ -314,12 +402,12 @@ def analyze_pr_comments(prs, report):
         all_override_comments, top_ticketnames)
 
     include_figure(
-        report,
+        reportfragments,
         figure_file_abspath,
         'Override comment rate plotted over time, resolved by individual JIRA tickets'
     )
 
-    report.write(textwrap.dedent(
+    reportfragments['apc4'] = textwrap.dedent(
     """
     When you read the plot, ask yourself: did we address those instabilities
     that have hurt us most? Did we fix them properly, or are they coming back?
@@ -330,7 +418,7 @@ def analyze_pr_comments(prs, report):
     constructing appropriate override commands:
 
     """
-    ))
+    )
 
     topn = 15
     # report.write(f'\nTop {topn} override command issuer:\n\n')
@@ -339,7 +427,7 @@ def analyze_pr_comments(prs, report):
         ['GitHub login', 'Number of overrides'],
         [[item, count] for item, count in counter.most_common(topn)],
     )
-    report.write(f'{tabletext}\n\n')
+    reportfragments['apc5'] = f'{tabletext}\n\n'
 
     # reportfragment = analyze_overrides(
     #     'Most frequent overrides (last 10 days)',
@@ -355,7 +443,7 @@ def analyze_pr_comments(prs, report):
         all_override_comments,
         prs
     )
-    report.write(reportfragment.getvalue())
+    reportfragments['apc6-most-freq-overrides-last30days'] = reportfragment.getvalue()
 
     # reportfragment = analyze_overrides(
     #     'Most frequent overrides (all-time)',
@@ -365,14 +453,34 @@ def analyze_pr_comments(prs, report):
     # )
     # report.write(reportfragment.getvalue())
 
+    return all_pr_comments, all_override_comments, reportfragments
 
-def analyze_overrides(heading, max_age_days, all_override_comments, prs):
+
+def analyze_overrides(
+        heading,
+        max_age_days,
+        all_override_comments,
+        prs,
+        include_heading=True,
+        only_main_table=False
+    ):
     print(f'\n\n\n* Override comment analysis: {heading}')
     reportfragment = StringIO()
-    reportfragment.write(f'\n\n### {heading}\n\n')
+
+    if include_heading:
+        reportfragment.write(f'\n\n### {heading}\n\n')
+
     reportfragment.write(f'Based on override commands issued in the last {max_age_days} days. ')
-    analyze_overrides_last_n_days(all_override_comments, max_age_days, reportfragment)
-    analyze_overrides_in_recent_prs(prs, max_age_days, reportfragment)
+    analyze_overrides_last_n_days(
+        all_override_comments,
+        max_age_days,
+        reportfragment,
+        only_main_table
+    )
+    analyze_overrides_in_recent_prs(prs, max_age_days)
+
+    if only_main_table:
+        return reportfragment
 
     # Find first occurrence of individual override JIRA tickets, and show the
     # ones that were used for the first time within the last N days (this
@@ -414,7 +522,7 @@ def analyze_overrides(heading, max_age_days, all_override_comments, prs):
     return reportfragment
 
 
-def analyze_overrides_in_recent_prs(prs, max_age_days, reportfragment):
+def analyze_overrides_in_recent_prs(prs, max_age_days):
     """
     Find pull requests not older than `max_age_days` and extract all override
     commands issued in them. Perform a statistical analysis on this set of
@@ -441,7 +549,7 @@ def analyze_overrides_in_recent_prs(prs, max_age_days, reportfragment):
     # Do not, for now, include this in the markdown report.
 
 
-def analyze_overrides_last_n_days(override_comments, n, reportfragment):
+def analyze_overrides_last_n_days(override_comments, n, reportfragment, only_main_table=False):
     print(f'** Histograms from override comments younger than {n} days')
     max_age_days = n
     ocs_to_analyze = []
@@ -459,10 +567,10 @@ def analyze_overrides_last_n_days(override_comments, n, reportfragment):
     # and https://github.com/PyGithub/PyGithub/issues/512 and
     # https://stackoverflow.com/a/30696682/145400.
     reportfragment.write(f'Oldest override command issued at {oldest_created_at} (UTC). ')
-    build_histograms_from_ocs(ocs_to_analyze, reportfragment)
+    build_histograms_from_ocs(ocs_to_analyze, reportfragment, only_main_table)
 
 
-def build_histograms_from_ocs(override_comments, reportfragment):
+def build_histograms_from_ocs(override_comments, reportfragment, only_main_table):
     topn = 10
     print(f'   Top {topn} JIRA tickets used in override comments')
     reportfragment.write(
@@ -474,6 +582,9 @@ def build_histograms_from_ocs(override_comments, reportfragment):
         [[item, count] for item, count in counter.most_common(topn)],
     )
     reportfragment.write(tabletext)
+
+    if only_main_table:
+        return
 
     print(f'   Top {topn} CI check names used in override comments')
     reportfragment.write(f'\nTop {topn} CI status check names:\n\n')
@@ -866,7 +977,7 @@ def plot_override_comment_rate_two_windows(override_comments):
         numpoints=4
     )
 
-    plt.xlabel('Time')
+    # plt.xlabel('Time')
     plt.ylabel('Override command rate [1/day]')
     # set_title('Override command rate (from both DC/OS repositories)')
     # set_subtitle('Arithmetic mean over rolling time window')
@@ -902,7 +1013,7 @@ def plot_override_comment_rate_multiple_jira_tickets(
         loc='upper left'
     )
 
-    plt.xlabel('Time')
+    # plt.xlabel('Time')
     plt.ylabel('Override command rate [1/day]')
     # set_title('Override command rate for most frequently tagged JIRA tickets')
     # set_subtitle('Arithmetic mean over rolling time window')
@@ -1010,11 +1121,13 @@ def pr_analyze_label_transitions(pr):
             # Only account for label changes until merge.
             if event.created_at < pr.merged_at:
 
-                if 'ship' in event._rawData['label']['name'].lower():
+                #if 'ship' in event._rawData['label']['name'].lower():
+                if 'ship' in event._lowerlabelname:
                     labels_in_order_until_merge.append(
                         ShipIt(event.created_at))
 
-                elif 'review' in event._rawData['label']['name'].lower():
+                #elif 'review' in event._rawData['label']['name'].lower():
+                elif 'review' in event._lowerlabelname:
                     labels_in_order_until_merge.append(
                         ReadyForReview(event.created_at))
 
@@ -1055,7 +1168,7 @@ def pr_analyze_label_transitions(pr):
     return tuple(labels_in_order_until_merge)
 
 
-def analyze_merged_prs(prs, report):
+def analyze_merged_prs(prs, reportfragments):
 
     log.info('Filter merged pull requests.')
     filtered_prs = [pr for pr in prs if pr.merged_at is not None]
@@ -1142,7 +1255,12 @@ def analyze_merged_prs(prs, report):
     latency_median, \
     figure_filepath_latency_raw_linscale, \
     figure_filepath_latency_raw_logscale = plot_latency(
-        df, 'time_pr_open_to_merge_days')
+        df,
+        'time_pr_open_to_merge_days',
+        rollingwindow_w_days=21,
+        ylabel='Open-to-merge latency [days]',
+        xlabel=None
+    )
 
     plt.figure()
     throughput_mean, figure_throughput_filepath = plot_throughput(filtered_prs)
@@ -1170,7 +1288,30 @@ def analyze_merged_prs(prs, report):
     _, \
     figure_filepath_ttm_shipit_to_merge_raw_linscale, \
     figure_filepath_ttm_shipit_to_merge_raw_logscale = plot_latency(
-        df['2017-03-01':], 'time_last_shipit_to_pr_merge_days', show_mean=False)
+        df['2017-03-01':],
+        'time_last_shipit_to_pr_merge_days',
+        show_mean=False,
+        rollingwindow_w_days=21,
+        ylabel='Shipit-to-merge latency [days]',
+        xlabel=None
+    )
+
+    # Same, for last N days. Keep track of figure file paths in global state
+    # dict. Use this in overview section.
+    plt.figure(figsize=(10.0, 3.2))
+    _, _, _ = plot_latency(
+        df.last('50D'),
+        'time_last_shipit_to_pr_merge_days',
+        show_mean=False,
+        show_median=False,
+        show_raw=True,
+        ylabel='Shipit-to-merge latency [hours]',
+        xlabel='PR merge time',
+        yticks=[0.1, 0.5, 1, 2, 5, 10, 24, 48, 72, 150],
+        convert_to_hours=True,  # Use unit [hours] instead of days
+        descr_suffix='last50days',
+        figid='figure_filepath_shipit_to_merge_raw_lst50days'
+    )
 
     with plt.xkcd():
         plt.figure()
@@ -1181,7 +1322,10 @@ def analyze_merged_prs(prs, report):
             'time_last_shipit_to_pr_merge_days',
             show_mean=False,
             show_raw=False,
-            descr_suffix='XKCD'
+            descr_suffix='XKCD',
+            rollingwindow_w_days=21,
+            ylabel='Shipit-to-merge latency [days]',
+            xlabel=None
         )
 
 
@@ -1189,10 +1333,10 @@ def analyze_merged_prs(prs, report):
     figure_filepath_various_latencies = plot_pr_lifecycle_latency_metrics(
         df['2017-07-01':])
 
-    report.write(textwrap.dedent(
+    reportfragments['prs1'] = textwrap.dedent(
     """
 
-    ## Pull request (PR) integration velocity: time-to-merge (TTM)
+    ## Pull request integration latency: time-to-merge (TTM)
 
     This analysis considers merged DC/OS pull requests across the two DC/OS
     repositories ("[upstream](https://github.com/dcos/dcos)" and
@@ -1206,34 +1350,34 @@ def analyze_merged_prs(prs, report):
 
     ### Open-to-merge latency
 
-    The following plot shows the number of days it took for individual PRs to
-    get merged. Each dot represents a single merged PR (or PR pair). The black
-    and orange lines show the median and arithmetic mean, correspondingly,
-    averaged over a rolling time window of 21 days width.
+    The following plot shows the number of days it took for individual PRs from
+    beging opened to getting merged. Each dot represents a single merged PR (or
+    PR pair). The black and orange lines show the median and arithmetic mean,
+    correspondingly, averaged over a rolling time window of 21 days width.
     """
-    ))
+    )
 
     include_figure(
-        report,
+        reportfragments,
         figure_filepath_latency_raw_linscale,
         'Pull request integration latency'
     )
 
-    report.write(textwrap.dedent(
+    reportfragments['prs2'] = textwrap.dedent(
     """
 
     As of outliers this plot is hard to resolve in the details. Let's look at
     the same graph with a logarithmic scale on the latency axis:
     """
-    ))
+    )
 
     include_figure(
-        report,
+        reportfragments,
         figure_filepath_latency_raw_logscale,
         'Pull request integration latency (logarithmic scale)'
     )
 
-    report.write(textwrap.dedent(
+    reportfragments['prs3'] = textwrap.dedent(
     """
     The latency values are usually spread across about four orders of magnitude
     at any given time, with no uniform density distribution. There is tendency
@@ -1248,15 +1392,15 @@ def analyze_merged_prs(prs, report):
     The following linear plot focuses on the interval between 0 and 10 days
     latency. This makes it easier to address the above's questions.
     """
-    ))
+    )
 
     include_figure(
-        report,
+        reportfragments,
         figure_latency_focus_on_median,
         'Pull request integration latency (focus on mean)'
     )
 
-    report.write(textwrap.dedent(
+    reportfragments['prs4'] = textwrap.dedent(
     """
 
     ### PR life cycle resolved in detail (shipit-to-merge, etc)
@@ -1269,7 +1413,7 @@ def analyze_merged_prs(prs, report):
     opposed to May 2016 above -- the ship-it label concept was introduced only
     in 2017).
     """
-    ))
+    )
 
     # include_figure(
     #     report,
@@ -1284,12 +1428,12 @@ def analyze_merged_prs(prs, report):
     # )
 
     include_figure(
-        report,
+        reportfragments,
         figure_filepath_ttm_shipit_to_merge_raw_logscale,
         'Pull request TTM ship-it-to-merge (logarithmic scale)'
     )
 
-    report.write(textwrap.dedent(
+    reportfragments['prs5'] = textwrap.dedent(
     """
     The time a pull request spent between ship-it and merge should be
     insignificant relative to time spent in previous stages of its life cycle.
@@ -1301,27 +1445,26 @@ def analyze_merged_prs(prs, report):
     case is shown by the following graph (linear scale without the raw data,
     showing only the rolling window median):
     """
-    ))
+    )
 
     include_figure(
-        report,
+        reportfragments,
         figure_filepath_various_latencies,
         'Pull request latencies, various metrics'
     )
 
-
-    report.write(textwrap.dedent(
+    reportfragments['prs6'] = textwrap.dedent(
     """
 
-    ## Pull request integration velocity: Throughput
+    ## Pull request integration throughput
 
     The following plot shows the number of PRs merged per day, averaged over a
     rolling time window of three weeks width.
     """
-    ))
+    )
 
     include_figure(
-        report,
+        reportfragments,
         figure_throughput_filepath,
         'Pull request integration throughput'
     )
@@ -1344,8 +1487,11 @@ def analyze_merged_prs(prs, report):
     # )
 
 
-def include_figure(report, filepath, heading):
-    report.write(f'\n\n[![{heading}]({filepath} "{heading}")]({filepath})\n\n')
+def include_figure(reportfragments, filepath, heading):
+    # They key is not too relevant here, it's the insertion order into
+    # the OrderedDict `reportfragments`.
+    reportfragments['figure-' + filepath] = \
+        f'\n\n[![{heading}]({filepath} "{heading}")]({filepath})\n\n'
 
 
 # What is good is low time to merge, and many pull requests merged per time.
@@ -1354,7 +1500,7 @@ def include_figure(report, filepath, heading):
 
 def plot_quality(df):
     df['quality'].plot(color='black')
-    #plt.xlabel('Time')
+    # plt.xlabel('Time')
     plt.ylabel('Throughput [1/day] / TTM [day]')
     # set_title('PR integration velocity for PRs in both DC/OS repos')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
@@ -1390,7 +1536,7 @@ def plot_throughput(filtered_prs):
         color='black',
     )
 
-    #plt.xlabel('Time')
+    # plt.xlabel('Time')
     plt.ylabel('Throughput [1/day]')
 
     ax.legend([
@@ -1406,26 +1552,49 @@ def plot_throughput(filtered_prs):
     return throughput, savefig('Pull request integration throughput')
 
 
-def _plot_latency_core(df, metricname, show_mean=True, show_raw=True):
+def _plot_latency_core(
+        df,
+        metricname,
+        ylabel,
+        xlabel,
+        rollingwindow_w_days,
+        convert_to_hours=False,
+        show_mean=True,
+        show_median=True,
+        show_raw=True
+    ):
 
-    rollingwindow = df[metricname].rolling('21d')
+    width_string = f'{rollingwindow_w_days}d'
+
+    series_to_plot = df[metricname].copy()
+
+    # Convert from unit [days] tp [hours].
+    if convert_to_hours:
+        series_to_plot = series_to_plot * 24.0
+
+    rollingwindow = series_to_plot.rolling(width_string)
     mean = rollingwindow.mean()
     median = rollingwindow.median()
-    legendlist = ['rolling window median (21 days)']
 
-    # Always show median, in the front
-    ax = median.plot(
-        linestyle='solid',
-        dash_capstyle='round',
-        color='black',
-        linewidth=1.3,
-        zorder=10
-    )
-    plt.xlabel('Pull request merge time')
-    plt.ylabel('Latency [days]')
+    #offset_seconds = - int(rollingwindow_w_days * 24 * 60 * 60 / 2.0) + 1
+    #median = median.shift(offset_seconds)
+
+    legendlist = []
+
+    ax = None
+
+    if show_median:
+        ax = median.plot(
+            linestyle='solid',
+            dash_capstyle='round',
+            color='black',
+            linewidth=1.3,
+            zorder=10,
+        )
+        legendlist.append(f'rolling window median ({rollingwindow_w_days} days)')
 
     if show_raw:
-        df[metricname].plot(
+        ax = series_to_plot.plot(
             # linestyle='dashdot',
             linestyle='None',
             color='gray',
@@ -1433,20 +1602,27 @@ def _plot_latency_core(df, metricname, show_mean=True, show_raw=True):
             markersize=4,
             markeredgecolor='gray',
             ax=ax,
-            zorder=1  # Show in the back.
+            zorder=1,  # Show in the back.
+            clip_on=True,
         )
-        legendlist.append('individual PRs (raw data)')
+        legendlist.append('individual PRs')
 
     if show_mean:
-        mean.plot(
+        ax = mean.plot(
             linestyle='solid',
             color='#e05f4e',
             linewidth=1.3,
             ax=ax,
-            zorder=5
+            zorder=5,
         )
-        legendlist.append('rolling window mean (21 days)')
+        legendlist.append(f'rolling window mean ({rollingwindow_w_days} days)')
 
+    if xlabel is not None:
+        plt.xlabel('Pull request merge time', fontsize=10)
+
+    plt.ylabel(ylabel, fontsize=10)
+
+    #plt.xticks(fontsize=14,
 
     #set_title('Time-to-merge for PRs in both DC/OS repositories')
     # subtitle = 'Freq spec from narrow rolling request rate -- ' + \
@@ -1454,23 +1630,81 @@ def _plot_latency_core(df, metricname, show_mean=True, show_raw=True):
     #set_subtitle('Raw data')
     #plt.tight_layout(rect=(0, 0, 1, 0.95))
 
-    ax.legend(legendlist, numpoints=4)
+    ax.legend(legendlist, numpoints=4, fontsize=8)
     return median, ax
 
 
 def plot_latency(
-        df, metricname, show_mean=True, show_raw=True, descr_suffix=''):
+        df,
+        metricname,
+        show_mean=True,
+        show_median=True,
+        show_raw=True,
+        descr_suffix='',
+        ylabel='Latency [days]',
+        xlabel='Pull request merge time',
+        rollingwindow_w_days=21,
+        figid=None,
+        convert_to_hours=False,
+        yticks=None
+    ):
 
-    median, ax = _plot_latency_core(df, metricname, show_mean, show_raw)
+    median, ax = _plot_latency_core(
+        df=df,
+        metricname=metricname,
+        ylabel=ylabel,
+        xlabel=xlabel,
+        rollingwindow_w_days=rollingwindow_w_days,
+        show_mean=show_mean,
+        show_median=show_median,
+        show_raw=show_raw,
+        convert_to_hours=convert_to_hours,
+    )
     plt.tight_layout()
     figure_filepath_latency_raw_linscale = savefig(
         f'PR integration latency (linear scale), metric: {metricname} {descr_suffix}')
 
-    median, ax = _plot_latency_core(df,  metricname, show_mean, show_raw)
-    ax.set_yscale('log')
+    plt.figure()
+
+    median, ax = _plot_latency_core(
+        df=df,
+        metricname=metricname,
+        ylabel=ylabel,
+        xlabel=xlabel,
+        rollingwindow_w_days=rollingwindow_w_days,
+        show_mean=show_mean,
+        show_median=show_median,
+        show_raw=show_raw,
+        convert_to_hours=convert_to_hours,
+    )
+
+    plt.yscale('log')
+
+    # Set ytick labels using 0.01, 0.1, 1, 10, 100, instead of 10^0 etc.
+    # Creds:
+    #  https://stackoverflow.com/q/21920233/145400
+    #  https://stackoverflow.com/q/14530113/145400
+    if yticks is not None:
+        # ax.set_yticks([0.001, 0.01, 0.1, 0.5, 1, 3, 10])
+        ax.set_yticks(yticks)
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
+
+    # https://github.com/pandas-dev/pandas/issues/2010
+    ax.set_xlim(ax.get_xlim()[0] - 1, ax.get_xlim()[1] + 1)
+
+    # The tight_layout magic does not get rid of the outer margin. Fortunately,
+    # numbers smaller than 0 and larger than 1 for left, bottom, right, top are
+    # allowed.
+    #plt.tight_layout(rect=(-0.01, -0.05, 1.0, 1.0))
     plt.tight_layout()
+    #plt.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0, hspace=0)
     figure_filepath_latency_raw_logscale = savefig(
         f'PR integration latency (logarithmic scale), metric:  {metricname} {descr_suffix}')
+
+    # Keep record of these figure files in a global state dictionary.
+    if figid is not None:
+        FIGURE_FILE_PATHS[figid + '_logscale'] = figure_filepath_latency_raw_logscale
+        FIGURE_FILE_PATHS[figid + '_linscale'] = figure_filepath_latency_raw_linscale
 
     return (
         median,
@@ -1527,7 +1761,7 @@ def plot_latency_focus_on_median(df, metricname):
     plt.ylim((-0.1, 10))
 
     # plt.xlabel('Pull request merge time')
-    plt.ylabel('open-to-merge latency [days]')
+    plt.ylabel('Open-to-merge latency [days]')
     # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     ax.legend([
@@ -1570,7 +1804,7 @@ def plot_pr_lifecycle_latency_metrics(df):
     # at 12 so that the details are easier to resolve.
     #plt.ylim((-0.5, 12))
     plt.xlabel('Pull request merge time')
-    plt.ylabel('Latency [days], 14 day rolling window median')
+    plt.ylabel('Latency [days], 14 day rwm')
     # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     # legend_entries = [f'{mn} rolling window median (14 days)' for mn in metricnames]
@@ -1612,9 +1846,12 @@ def set_subtitle(text):
 
 
 def matplotlib_config():
-    matplotlib.rcParams['figure.figsize'] = [10.0, 6.5]
+    matplotlib.rcParams['xtick.labelsize'] = 6
+    matplotlib.rcParams['ytick.labelsize'] = 6
+    matplotlib.rcParams['axes.labelsize'] = 10
+    matplotlib.rcParams['figure.figsize'] = [10.0, 4.2]
     matplotlib.rcParams['figure.dpi'] = 100
-    matplotlib.rcParams['savefig.dpi'] = 150
+    matplotlib.rcParams['savefig.dpi'] = 190
     # mpl.rcParams['font.size'] = 12
 
     original_color_cycle = matplotlib.rcParams['axes.prop_cycle']
