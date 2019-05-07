@@ -256,8 +256,8 @@ def create_overview(
     )
 
     reportfragments['overview3'] = analyze_overrides(
-        'Most frequent overrides (last 30 days)',
-        30,
+        'noop heading',
+        15,
         all_override_comments,
         prs_for_comment_analysis,
         include_heading=False,
@@ -550,7 +550,7 @@ def analyze_overrides_in_recent_prs(prs, max_age_days):
     # Do not, for now, include this in the markdown report.
 
 
-def analyze_overrides_last_n_days(override_comments, n, reportfragment, only_main_table=False):
+def analyze_overrides_last_n_days(override_comments, n, reportfragment, only_main_table_enumeration=False):
     print(f'** Histograms from override comments younger than {n} days')
     max_age_days = n
     ocs_to_analyze = []
@@ -561,31 +561,43 @@ def analyze_overrides_last_n_days(override_comments, n, reportfragment, only_mai
     print(f'** Number of override comments: {len(ocs_to_analyze)}')
     reportfragment.write(f'Number of override commands issued: **{len(ocs_to_analyze)}**. ')
     oldest_created_at = min(c['comment_obj'].created_at for c in ocs_to_analyze)
+    newest_created_at = max(c['comment_obj'].created_at for c in ocs_to_analyze)
     # `oldest_created_at` is a naive timezone object representing the time
     # of the comment creation in UTC. GitHub returns tz information, but PyGitHub
     # does not parse it properly. See
     # https://github.com/PyGithub/PyGithub/blob/365a0a24d3d2f06eeb4c93b4487fcfb88ae95dd0/github/GithubObject.py#L168
     # and https://github.com/PyGithub/PyGithub/issues/512 and
     # https://stackoverflow.com/a/30696682/145400.
-    reportfragment.write(f'Oldest override command issued at {oldest_created_at} (UTC). ')
-    build_histograms_from_ocs(ocs_to_analyze, reportfragment, only_main_table)
+    reportfragment.write(f'Oldest override command issued at {oldest_created_at} (UTC), ')
+    reportfragment.write(f'newest issued at {newest_created_at} (UTC).')
+    build_histograms_from_ocs(ocs_to_analyze, reportfragment, only_main_table_enumeration)
 
 
-def build_histograms_from_ocs(override_comments, reportfragment, only_main_table):
+def build_histograms_from_ocs(
+        override_comments,
+        reportfragment,
+        only_main_table_enumeration
+    ):
     topn = 10
     print(f'   Top {topn} JIRA tickets used in override comments')
-    reportfragment.write(
-        f'\nTop {topn} JIRA tickets (do we work on the top ones? we should!):\n\n')
 
     counter = Counter([oc['ticket'] for oc in override_comments])
+
+    reportfragment.write(
+        f'\nThe top {topn} JIRA tickets, sorted by the number of overrides: ')
+
+    if only_main_table_enumeration:
+
+        reportfragment.write(', '.join(
+            f'{item} ({count})' for item, count in counter.most_common(topn))
+        )
+        return
+
     tabletext = get_mdtable(
         ['JIRA ticket', 'Number of overrides'],
         [[item, count] for item, count in counter.most_common(topn)],
     )
-    reportfragment.write(tabletext)
-
-    if only_main_table:
-        return
+    reportfragment.write('\n\n' + tabletext)
 
     print(f'   Top {topn} CI check names used in override comments')
     reportfragment.write(f'\nTop {topn} CI status check names:\n\n')
