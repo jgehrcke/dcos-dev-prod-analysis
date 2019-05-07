@@ -151,13 +151,14 @@ def main():
     # Create ordered dictionary for collecting Markdown report fragments. Pass
     # it in to functions, expect it to be mutated by individual functions.
     reportfragments_prs = OrderedDict()
-    analyze_merged_prs(prs_for_throughput_analysis, reportfragments_prs)
+    pr_df = analyze_merged_prs(prs_for_throughput_analysis, reportfragments_prs)
 
     reportfragments_comments = OrderedDict()
     all_pr_comments, all_override_comments, _ = analyze_pr_comments(prs_for_comment_analysis, reportfragments_comments)
 
     reportfragments_overview = OrderedDict()
     create_overview(
+        pr_df,
         reportfragments_overview,
         reportfragments_comments,
         reportfragments_prs,
@@ -224,6 +225,7 @@ def main():
 
 
 def create_overview(
+        df,
         reportfragments,
         reportfragments_comments,
         reportfragments_prs,
@@ -247,7 +249,21 @@ def create_overview(
         'Shipit-to-merge latency, logarithmic scale, raw data only'
     )
 
+    mergedlast50days = df.last('50D')['time_last_shipit_to_pr_merge_days']
+    count_mergedlast50days = len(mergedlast50days)
+    count_below5hours = (mergedlast50days < 5.0/24.0).sum()
+    ratio_percent = int(count_below5hours / float(count_mergedlast50days) * 100)
+
     reportfragments['overview2'] = textwrap.dedent(
+    f"""
+    {count_below5hours} of {count_mergedlast50days} pull requests
+    ({ratio_percent} %) were merged within 5 hours after the ship-it label was applied.
+
+
+    """
+    )
+
+    reportfragments['overview3'] = textwrap.dedent(
     """
 
     ### Which CI instabilities have recently hurt productivity?
@@ -255,7 +271,7 @@ def create_overview(
     """
     )
 
-    reportfragments['overview3'] = analyze_overrides(
+    reportfragments['overview4'] = analyze_overrides(
         'noop heading',
         15,
         all_override_comments,
@@ -1503,6 +1519,7 @@ def analyze_merged_prs(prs, reportfragments):
     #     'Pull request integration velocity'
     # )
 
+    return df
 
 def include_figure(reportfragments, filepath, heading):
     # They key is not too relevant here, it's the insertion order into
