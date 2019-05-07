@@ -1272,7 +1272,10 @@ def analyze_merged_prs(prs, reportfragments):
 
     plt.figure()
     figure_latency_focus_on_median = plot_latency_focus_on_median(
-        df, 'time_pr_open_to_merge_days')
+        df,
+        'time_pr_open_to_merge_days',
+        ylabel='Open-to-merge latency [days]'
+    )
 
     # Create plots with a different TTM metric, the time difference
     # between the last ship it label and the PR merge. This applies to
@@ -1281,7 +1284,8 @@ def analyze_merged_prs(prs, reportfragments):
     figure_filepath_ttm_shipit_to_merge_focus_on_median = \
         plot_latency_focus_on_median(
             df['2017-03-01':],
-            'time_last_shipit_to_pr_merge_days'
+            'time_last_shipit_to_pr_merge_days',
+            ylabel='Shipit-to-merge latency [days]'
         )
 
     plt.figure()
@@ -1713,7 +1717,7 @@ def plot_latency(
     )
 
 
-def plot_latency_focus_on_median(df, metricname):
+def plot_latency_focus_on_median(df, metricname, ylabel=None):
 
     rollingwindow = df[metricname].rolling('21d')
     median = rollingwindow.median()
@@ -1761,7 +1765,10 @@ def plot_latency_focus_on_median(df, metricname):
     plt.ylim((-0.1, 10))
 
     # plt.xlabel('Pull request merge time')
-    plt.ylabel('Open-to-merge latency [days]')
+    if ylabel is not None:
+        plt.ylabel(ylabel)
+    else:
+        plt.ylabel('Latency [days]')
     # plt.tight_layout(rect=(0, 0, 1, 0.95))
 
     ax.legend([
