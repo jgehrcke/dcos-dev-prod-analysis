@@ -576,17 +576,19 @@ def analyze_overrides_last_n_days(override_comments, n, reportfragment, only_mai
             ocs_to_analyze.append(oc)
     print(f'** Number of override comments: {len(ocs_to_analyze)}')
     reportfragment.write(f'Number of override commands issued: **{len(ocs_to_analyze)}**. ')
-    oldest_created_at = min(c['comment_obj'].created_at for c in ocs_to_analyze)
-    newest_created_at = max(c['comment_obj'].created_at for c in ocs_to_analyze)
-    # `oldest_created_at` is a naive timezone object representing the time
-    # of the comment creation in UTC. GitHub returns tz information, but PyGitHub
-    # does not parse it properly. See
-    # https://github.com/PyGithub/PyGithub/blob/365a0a24d3d2f06eeb4c93b4487fcfb88ae95dd0/github/GithubObject.py#L168
-    # and https://github.com/PyGithub/PyGithub/issues/512 and
-    # https://stackoverflow.com/a/30696682/145400.
-    reportfragment.write(f'Oldest override command issued at {oldest_created_at} (UTC), ')
-    reportfragment.write(f'newest issued at {newest_created_at} (UTC).')
-    build_histograms_from_ocs(ocs_to_analyze, reportfragment, only_main_table_enumeration)
+
+    if ocs_to_analyze:
+        oldest_created_at = min(c['comment_obj'].created_at for c in ocs_to_analyze)
+        newest_created_at = max(c['comment_obj'].created_at for c in ocs_to_analyze)
+        # `oldest_created_at` is a naive timezone object representing the time
+        # of the comment creation in UTC. GitHub returns tz information, but PyGitHub
+        # does not parse it properly. See
+        # https://github.com/PyGithub/PyGithub/blob/365a0a24d3d2f06eeb4c93b4487fcfb88ae95dd0/github/GithubObject.py#L168
+        # and https://github.com/PyGithub/PyGithub/issues/512 and
+        # https://stackoverflow.com/a/30696682/145400.
+        reportfragment.write(f'Oldest override command issued at {oldest_created_at} (UTC), ')
+        reportfragment.write(f'newest issued at {newest_created_at} (UTC).')
+        build_histograms_from_ocs(ocs_to_analyze, reportfragment, only_main_table_enumeration)
 
 
 def build_histograms_from_ocs(
@@ -631,7 +633,8 @@ def get_mdtable(header_list, value_matrix):
     """
     Generate table text in Markdown.
     """
-    assert value_matrix
+    if not value_matrix:
+        return ""
 
     tw = pytablewriter.MarkdownTableWriter()
     tw.stream = StringIO()
