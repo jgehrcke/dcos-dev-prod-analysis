@@ -151,13 +151,14 @@ def main():
     # Create ordered dictionary for collecting Markdown report fragments. Pass
     # it in to functions, expect it to be mutated by individual functions.
     reportfragments_prs = OrderedDict()
-    analyze_merged_prs(prs_for_throughput_analysis, reportfragments_prs)
+    pr_df = analyze_merged_prs(prs_for_throughput_analysis, reportfragments_prs)
 
     reportfragments_comments = OrderedDict()
     all_pr_comments, all_override_comments, _ = analyze_pr_comments(prs_for_comment_analysis, reportfragments_comments)
 
     reportfragments_overview = OrderedDict()
     create_overview(
+        pr_df,
         reportfragments_overview,
         reportfragments_comments,
         reportfragments_prs,
@@ -224,6 +225,7 @@ def main():
 
 
 def create_overview(
+        df,
         reportfragments,
         reportfragments_comments,
         reportfragments_prs,
@@ -247,7 +249,21 @@ def create_overview(
         'Shipit-to-merge latency, logarithmic scale, raw data only'
     )
 
+    mergedlast50days = df.last('50D')['time_last_shipit_to_pr_merge_days']
+    count_mergedlast50days = len(mergedlast50days)
+    count_below5hours = (mergedlast50days < 5.0/24.0).sum()
+    ratio_percent = int(count_below5hours / float(count_mergedlast50days) * 100)
+
     reportfragments['overview2'] = textwrap.dedent(
+    f"""
+    {count_below5hours} of {count_mergedlast50days} pull requests
+    ({ratio_percent} %) were merged within 5 hours after the ship-it label was applied.
+
+
+    """
+    )
+
+    reportfragments['overview3'] = textwrap.dedent(
     """
 
     ### Which CI instabilities have recently hurt productivity?
@@ -255,7 +271,7 @@ def create_overview(
     """
     )
 
-    reportfragments['overview3'] = analyze_overrides(
+    reportfragments['overview4'] = analyze_overrides(
         'noop heading',
         15,
         all_override_comments,
@@ -560,17 +576,19 @@ def analyze_overrides_last_n_days(override_comments, n, reportfragment, only_mai
             ocs_to_analyze.append(oc)
     print(f'** Number of override comments: {len(ocs_to_analyze)}')
     reportfragment.write(f'Number of override commands issued: **{len(ocs_to_analyze)}**. ')
-    oldest_created_at = min(c['comment_obj'].created_at for c in ocs_to_analyze)
-    newest_created_at = max(c['comment_obj'].created_at for c in ocs_to_analyze)
-    # `oldest_created_at` is a naive timezone object representing the time
-    # of the comment creation in UTC. GitHub returns tz information, but PyGitHub
-    # does not parse it properly. See
-    # https://github.com/PyGithub/PyGithub/blob/365a0a24d3d2f06eeb4c93b4487fcfb88ae95dd0/github/GithubObject.py#L168
-    # and https://github.com/PyGithub/PyGithub/issues/512 and
-    # https://stackoverflow.com/a/30696682/145400.
-    reportfragment.write(f'Oldest override command issued at {oldest_created_at} (UTC), ')
-    reportfragment.write(f'newest issued at {newest_created_at} (UTC).')
-    build_histograms_from_ocs(ocs_to_analyze, reportfragment, only_main_table_enumeration)
+
+    if ocs_to_analyze:
+        oldest_created_at = min(c['comment_obj'].created_at for c in ocs_to_analyze)
+        newest_created_at = max(c['comment_obj'].created_at for c in ocs_to_analyze)
+        # `oldest_created_at` is a naive timezone object representing the time
+        # of the comment creation in UTC. GitHub returns tz information, but PyGitHub
+        # does not parse it properly. See
+        # https://github.com/PyGithub/PyGithub/blob/365a0a24d3d2f06eeb4c93b4487fcfb88ae95dd0/github/GithubObject.py#L168
+        # and https://github.com/PyGithub/PyGithub/issues/512 and
+        # https://stackoverflow.com/a/30696682/145400.
+        reportfragment.write(f'Oldest override command issued at {oldest_created_at} (UTC), ')
+        reportfragment.write(f'newest issued at {newest_created_at} (UTC).')
+        build_histograms_from_ocs(ocs_to_analyze, reportfragment, only_main_table_enumeration)
 
 
 def build_histograms_from_ocs(
@@ -615,7 +633,8 @@ def get_mdtable(header_list, value_matrix):
     """
     Generate table text in Markdown.
     """
-    assert value_matrix
+    if not value_matrix:
+        return ""
 
     tw = pytablewriter.MarkdownTableWriter()
     tw.stream = StringIO()
@@ -1503,6 +1522,7 @@ def analyze_merged_prs(prs, reportfragments):
     #     'Pull request integration velocity'
     # )
 
+    return df
 
 def include_figure(reportfragments, filepath, heading):
     # They key is not too relevant here, it's the insertion order into
