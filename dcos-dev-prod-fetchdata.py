@@ -19,6 +19,7 @@ import os
 import pickle
 import concurrent.futures
 from datetime import datetime
+import sys
 
 from github import Github
 import requests
@@ -61,11 +62,11 @@ def main():
 
     log.info('Request quota limit: %s', GHUB.get_rate_limit())
     # check_request_quota_and_wait()
-    fetch_prs_with_comments_for_repo(repo, reponame)
+    fetch_prs_with_details_for_repo(repo, reponame)
 
 
-def fetch_prs_with_comments_for_repo(repo, reponame):
-    prs = fetch_pull_requests(repo, reponame)
+def fetch_prs_with_details_for_repo(repo, reponame):
+    prs = fetch_all_pull_requests(repo, reponame)
     prs = fetch_details_for_all_prs(prs, reponame)
     return prs
 
@@ -84,10 +85,13 @@ def fetch_details_for_all_prs(prs_current_without_details, reponame):
 
     if prs_old_with_comments is not None:
 
+        #if '--update' in sys.args:
+        #    log.info('Fetch details only for newest PRs')
+
         # Fetch comments & events only for new pull requests.
-        # `prs_current_without_details` might be fresher (contain more/newer
-        # PRs). `prs_current_without_details` is a dictionary with the keys
-        # being the PR numbers.
+        # `prs_current_without_details` is likely to be be fresher (contain
+        # more/newer PRs). `prs_current_without_details` is a dictionary with
+        # the keys being the PR numbers.
 
         log.info(
             'Loaded %s PRs with comments & events from disk',
@@ -121,7 +125,7 @@ def fetch_details_for_all_prs(prs_current_without_details, reponame):
         # requests and their associated comments every now and then is required
         # to make sure that new comments made in old pull requests are not
         # missed.
-        max_age_days = 80
+        max_age_days = 50
         old_prs_to_analyze = []
         log.info('Identifying recent PRs (younger than %s days)', max_age_days)
         for _, pr in prs_old_with_comments.items():
@@ -143,7 +147,7 @@ def fetch_details_for_all_prs(prs_current_without_details, reponame):
                 # uniqueified below.
                 old_prs_to_analyze.append(pr)
 
-        log.info('Recent PRs: %s', old_prs_to_analyze)
+        log.info('Recent PRs: %s: %s', len(old_prs_to_analyze), old_prs_to_analyze)
 
         log.info(
             'Fetching comments & events for %s recent PRs',
@@ -311,36 +315,36 @@ def fetch_details_for_pr(pr):
     return pr._issue_comments, pr._events
 
 
-def fetch_pull_requests(repo, reponame):
+def fetch_all_pull_requests(repo, reponame):
 
-    log.info('Fetch pull requests with pagination (~100 per HTTP request)')
+    log.info('Fetch all pull requests with pagination (~100 per HTTP request)')
 
     persist_filepath = reponame + '_pull-requests.pickle'
-    prs = load_file_if_exists(persist_filepath)
-    if prs is not None:
-        # Note(JP): in addition to loading from disk a lightweight best-effort
-        # update is performed using the GET /repos/:owner/:repo/pulls call with
-        # appropriate usage of the `state` and `sort` parameters. Note however
-        # that this is probably still imperfect, with a systematic error
-        # accumulating over time. That is, a regular complete refresh of the
-        # data is advisable anyway.
-        log.info('Get first page of last updated PRs from GitHub')
-        lastupdated_prs = repo.get_pulls(
-            'all', sort='updated', direction='desc').get_page(0)
-        log.info(f'Got {len(lastupdated_prs)} PRs')
-        for lastupdated_pr in lastupdated_prs:
-            # Replace the PR loaded from disk with its updated variant.
-            prs[lastupdated_pr.number] = lastupdated_pr
+    # prs = load_file_if_exists(persist_filepath)
+    # if prs is not None:
+    #     # Note(JP): in addition to loading from disk a lightweight best-effort
+    #     # update is performed using the GET /repos/:owner/:repo/pulls call with
+    #     # appropriate usage of the `state` and `sort` parameters. Note however
+    #     # that this is probably still imperfect, with a systematic error
+    #     # accumulating over time. That is, a regular complete refresh of the
+    #     # data is advisable anyway.
+    #     log.info('Get first page of last updated PRs from GitHub')
+    #     lastupdated_prs = repo.get_pulls(
+    #         'all', sort='updated', direction='desc').get_page(0)
+    #     log.info(f'Got {len(lastupdated_prs)} PRs')
+    #     for lastupdated_pr in lastupdated_prs:
+    #         # Replace the PR loaded from disk with its updated variant.
+    #         prs[lastupdated_pr.number] = lastupdated_pr
 
-        log.info('Get first page of last created PRs from GitHub')
-        lastcreated_prs = repo.get_pulls('all').get_page(0)
-        log.info(f'Got {len(lastcreated_prs)} PRs')
-        for lastcreated_pr in lastcreated_prs:
-            # Replace the PR loaded from disk with its updated variant.
-            prs[lastcreated_pr.number] = lastcreated_pr
+    #     log.info('Get first page of last created PRs from GitHub')
+    #     lastcreated_prs = repo.get_pulls('all').get_page(0)
+    #     log.info(f'Got {len(lastcreated_prs)} PRs')
+    #     for lastcreated_pr in lastcreated_prs:
+    #         # Replace the PR loaded from disk with its updated variant.
+    #         prs[lastcreated_pr.number] = lastcreated_pr
 
-        # Return what was read from disk (plus best-effort update)
-        return prs
+    #     # Return what was read from disk (plus best-effort update)
+    #     return prs
 
     reqlimit_before = GHUB.get_rate_limit().core.remaining
     prs = {}
